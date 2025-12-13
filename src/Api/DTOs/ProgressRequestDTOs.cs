@@ -20,7 +20,8 @@ namespace Api.DTOs
         bool IsOverdue,
         int? ProgressPercentage,
         DateTime? EstimatedCompletion,
-        int UpdateCount
+        int UpdateCount,
+        List<ProgressRequestUpdateItem> Updates
     );
 
     public record ProgressRequestDetail(

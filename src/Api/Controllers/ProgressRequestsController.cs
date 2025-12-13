@@ -6,7 +6,6 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Controllers
@@ -42,7 +41,7 @@ namespace Api.Controllers
         /// </summary>
         // GET: /api/ProgressRequests/{id}/cancel
         [HttpGet]
-        [Authorize(Roles = "Editor,Admin")]
+        [Authorize(Roles = "Editor,Admin,Viewer")]
         public async Task<ActionResult<List<ProgressRequestListItem>>> GetProgressRequests(
             [FromQuery] string? status = null,
             [FromQuery] bool? myRequests = null,
@@ -106,7 +105,19 @@ namespace Api.Controllers
                     pr.DueDate.HasValue && pr.DueDate.Value < DateTime.UtcNow && !pr.IsResponded,
                     pr.ProgressPercentage,
                     pr.EstimatedCompletion,
-                    pr.Updates.Count
+                    pr.Updates.Count,
+                    pr.Updates.OrderByDescending(u => u.UpdatedAt)
+                        .Select(u => new ProgressRequestUpdateItem(
+                            u.Id,
+                            u.ProgressRequestId,
+                            u.UpdatedByUserId,
+                            u.UpdatedBy.DisplayName,
+                            u.ProgressInfo,
+                            u.ProgressPercentage,
+                            u.EstimatedCompletion,
+                            u.UpdatedAt
+                        ))
+                        .ToList()
                 ))
                 .ToList();
 
@@ -178,71 +189,6 @@ namespace Api.Controllers
             return Ok(result);
         }
 
-
-        //  [HttpGet("ticket/{ticketId}")]
-        // public async Task<ActionResult<List<ProgressRequestDetail>>> GetTicketProgressRequests(
-        //     long ticketId
-        // )
-        // {
-        //     var progressRequests = await _context
-        //         .ProgressRequests
-        //         .Include(pr => pr.Ticket)
-        //         .Include(pr => pr.RequestedBy)
-        //         .Include(pr => pr.TargetUser)
-        //         .Include(pr => pr.RespondedBy)
-        //         .Include(pr => pr.ResponseAction)
-        //         .Include(pr => pr.Updates)  // NEW: Include all updates
-        //             .ThenInclude(u => u.UpdatedBy)  // Include user info for each update
-        //         .Where(pr => pr.TicketId == ticketId)
-        //         .OrderByDescending(pr => pr.RequestedAt)
-        //         .ToListAsync();
-
-        //     if (!progressRequests.Any())
-        //         return Ok(new List<ProgressRequestDetail>());
-
-        //     var result = progressRequests
-        //         .Select(pr => new ProgressRequestDetail(
-        //             pr.Id,
-        //             pr.TicketId,
-        //             pr.Ticket.ExternalCode,
-        //             pr.Ticket.Title,
-        //             pr.RequestedByUserId,
-        //             pr.RequestedBy.DisplayName,
-        //             pr.TargetUserId,
-        //             pr.TargetUser.DisplayName,
-        //             pr.RequestMessage,
-        //             pr.RequestedAt,
-        //             pr.DueDate,
-        //             pr.ProgressInfo,
-        //             pr.IsResponded,
-        //             pr.RespondedAt,
-        //             pr.RespondedByUserId,
-        //             pr.RespondedBy?.DisplayName,
-        //             pr.ResponseActionId,
-        //             pr.ResponseAction?.Notes,
-        //             pr.Status,
-        //             pr.NotificationId,
-        //             pr.ProgressPercentage,
-        //             pr.EstimatedCompletion,
-        //             // NEW: Map all updates to DTOs
-        //             pr.Updates.OrderByDescending(u => u.UpdatedAt)
-        //                 .Select(u => new ProgressRequestUpdateItem(
-        //                     u.Id,
-        //                     u.ProgressRequestId,
-        //                     u.UpdatedByUserId,
-        //                     u.UpdatedBy.DisplayName,
-        //                     u.ProgressInfo,
-        //                     u.ProgressPercentage,
-        //                     u.EstimatedCompletion,
-        //                     u.UpdatedAt
-        //                 ))
-        //                 .ToList()
-        //         ))
-        //         .ToList();
-
-        //     return Ok(result);
-        // }
-
         /// <summary>
         /// Provide progress update
         /// </summary>
@@ -262,18 +208,15 @@ namespace Api.Controllers
                 return NotFound(new { message = "Progress request bulunamadı" });
 
             var userId = GetCurrentUserId();
-            _logger.LogInformation($"_______________________{userId}");
-            _logger.LogInformation($"_______________________{progressRequest.Id}");
-            _logger.LogInformation($"_______________________{progressRequest.Id}");
 
-             var progressUpdate = new ProgressRequestUpdate
+            var progressUpdate = new ProgressRequestUpdate
             {
                 ProgressRequestId = progressRequest.Id,
                 UpdatedByUserId = userId,
                 ProgressInfo = request.ProgressInfo,
                 ProgressPercentage = request.ProgressPercentage,
-                EstimatedCompletion = request.EstimatedCompletion.HasValue 
-                    ? DateTime.SpecifyKind(request.EstimatedCompletion.Value, DateTimeKind.Utc) 
+                EstimatedCompletion = request.EstimatedCompletion.HasValue
+                    ? DateTime.SpecifyKind(request.EstimatedCompletion.Value, DateTimeKind.Utc)
                     : null,
                 UpdatedAt = DateTime.UtcNow,
             };
@@ -293,8 +236,6 @@ namespace Api.Controllers
                     DateTimeKind.Utc
                 );
             }
-
-            
 
             // Optional: Also create a ticket action for audit trail
 
@@ -357,8 +298,8 @@ namespace Api.Controllers
                 ProgressRequestId = progressRequest.Id,
                 UpdatedByUserId = userId,
                 ProgressInfo = request.ResponseNotes,
-                ProgressPercentage = 100,  // Assuming completion
-                UpdatedAt = DateTime.UtcNow
+                ProgressPercentage = 100, // Assuming completion
+                UpdatedAt = DateTime.UtcNow,
             };
 
             // Create ticket action FIRST
