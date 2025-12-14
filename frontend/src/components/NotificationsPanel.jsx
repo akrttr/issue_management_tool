@@ -164,7 +164,7 @@ export default function NotificationsPanel({ isOpen, onClose, onNotificationClic
             'ProgressRequest': 'Bilgi Talebi',
             'StatusChanged': 'Durum Değişikliği',
             'TicketClosed': 'Sorun Kapatıldı',
-            'CommentAdded': 'Yeni Yorum',
+            'CommentAdded': 'Yeni Bilgi',
             'TicketAssigned': 'Atama',
         };
         return labels[type] || type;

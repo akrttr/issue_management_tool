@@ -1,17 +1,16 @@
+using System.Security.Claims;
 using Api.DTOs;
+using Api.Helpers;
+using Api.Services;
 using Domain.Entities;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
-using Api.Services;
-using Api.Helpers;
 
 namespace Api.Controllers
 {
-
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -21,9 +20,11 @@ namespace Api.Controllers
         private readonly ILogger<TicketPausesController> _logger;
         private readonly ICacheService _cache;
 
-        public TicketPausesController(AppDbContext context,
-                                        ILogger<TicketPausesController> logger,
-                                        ICacheService cache)
+        public TicketPausesController(
+            AppDbContext context,
+            ILogger<TicketPausesController> logger,
+            ICacheService cache
+        )
         {
             _context = context;
             _logger = logger;
@@ -60,10 +61,11 @@ namespace Api.Controllers
         // GET: /api/TicketPauses
         [HttpGet]
         public async Task<ActionResult<List<TicketPauseListItem>>> GetAllPauses(
-            [FromQuery] bool? activeOnly = null)
+            [FromQuery] bool? activeOnly = null
+        )
         {
-            var query = _context.TicketPauses
-                .Include(tp => tp.Ticket)
+            var query = _context
+                .TicketPauses.Include(tp => tp.Ticket)
                 .Include(tp => tp.PausedByUser)
                 .Include(tp => tp.ResumedByUser)
                 .AsQueryable();
@@ -73,23 +75,23 @@ namespace Api.Controllers
                 query = query.Where(tp => tp.ResumedAt == null);
             }
 
-            var pauses = await query
-                .OrderByDescending(tp => tp.PausedAt)
-                .ToListAsync();
+            var pauses = await query.OrderByDescending(tp => tp.PausedAt).ToListAsync();
 
-            var result = pauses.Select(tp => new TicketPauseListItem(
-                tp.Id,
-                tp.TicketId,
-                tp.Ticket.ExternalCode,
-                tp.PausedAt,
-                tp.ResumedAt,
-                tp.PauseReason,
-                tp.ResumeNotes,
-                tp.PausedByUser.DisplayName,
-                tp.ResumedByUser?.DisplayName,
-                tp.ResumedAt == null,
-                (int)CalculateDurationHours(tp.PausedAt, tp.ResumedAt)
-            )).ToList();
+            var result = pauses
+                .Select(tp => new TicketPauseListItem(
+                    tp.Id,
+                    tp.TicketId,
+                    tp.Ticket.ExternalCode,
+                    tp.PausedAt,
+                    tp.ResumedAt,
+                    tp.PauseReason,
+                    tp.ResumeNotes,
+                    tp.PausedByUser.DisplayName,
+                    tp.ResumedByUser?.DisplayName,
+                    tp.ResumedAt == null,
+                    (int)CalculateDurationHours(tp.PausedAt, tp.ResumedAt)
+                ))
+                .ToList();
 
             return Ok(result);
         }
@@ -98,29 +100,31 @@ namespace Api.Controllers
         [HttpGet("ticket/{ticketId}")]
         public async Task<ActionResult<List<TicketPauseDetail>>> GetTicketPauses(long ticketId)
         {
-            var pauses = await _context.TicketPauses
-                .Include(tp => tp.Ticket)
+            var pauses = await _context
+                .TicketPauses.Include(tp => tp.Ticket)
                 .Include(tp => tp.PausedByUser)
                 .Include(tp => tp.ResumedByUser)
                 .Where(tp => tp.TicketId == ticketId)
                 .OrderByDescending(tp => tp.PausedAt)
                 .ToListAsync();
 
-            var result = pauses.Select(tp => new TicketPauseDetail(
-                tp.Id,
-                tp.TicketId,
-                tp.Ticket.ExternalCode,
-                tp.Ticket.Title,
-                tp.PausedAt,
-                tp.ResumedAt,
-                tp.PauseReason,
-                tp.ResumeNotes,
-                tp.PausedByUserId,
-                tp.PausedByUser.DisplayName,
-                tp.ResumedByUserId,
-                tp.ResumedByUser?.DisplayName,
-                tp.CreatedAt
-            )).ToList();
+            var result = pauses
+                .Select(tp => new TicketPauseDetail(
+                    tp.Id,
+                    tp.TicketId,
+                    tp.Ticket.ExternalCode,
+                    tp.Ticket.Title,
+                    tp.PausedAt,
+                    tp.ResumedAt,
+                    tp.PauseReason,
+                    tp.ResumeNotes,
+                    tp.PausedByUserId,
+                    tp.PausedByUser.DisplayName,
+                    tp.ResumedByUserId,
+                    tp.ResumedByUser?.DisplayName,
+                    tp.CreatedAt
+                ))
+                .ToList();
 
             return Ok(result);
         }
@@ -129,8 +133,8 @@ namespace Api.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<TicketPauseDetail>> GetPause(long id)
         {
-            var pause = await _context.TicketPauses
-                .Include(tp => tp.Ticket)
+            var pause = await _context
+                .TicketPauses.Include(tp => tp.Ticket)
                 .Include(tp => tp.PausedByUser)
                 .Include(tp => tp.ResumedByUser)
                 .FirstOrDefaultAsync(tp => tp.Id == id);
@@ -155,14 +159,16 @@ namespace Api.Controllers
             );
             await InvalidateTicketListCacheAsync();
             await InvalidateTicketDetailCacheAsync(id);
-
+            await InvalidateRecentActivities();
             return Ok(result);
         }
 
         // POST: /api/TicketPauses
         [HttpPost]
         [Authorize(Roles = "Editor,Admin")]
-        public async Task<ActionResult<TicketPauseDetail>> CreatePause([FromBody] CreateTicketPauseRequest request)
+        public async Task<ActionResult<TicketPauseDetail>> CreatePause(
+            [FromBody] CreateTicketPauseRequest request
+        )
         {
             var ticket = await _context.Tickets.FindAsync(request.TicketId);
 
@@ -181,7 +187,7 @@ namespace Api.Controllers
                 PausedByUserId = userId,
                 PausedAt = DateTime.UtcNow,
                 PauseReason = request.PauseReason,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
             };
 
             _context.TicketPauses.Add(pause);
@@ -200,7 +206,7 @@ namespace Api.Controllers
                 ToStatus = TicketStatus.PAUSED,
                 Notes = $"Duraklama Sebebi: {request.PauseReason}",
                 PerformedById = userId,
-                PerformedAt = DateTime.UtcNow
+                PerformedAt = DateTime.UtcNow,
             };
 
             _context.TicketActions.Add(action);
@@ -208,26 +214,27 @@ namespace Api.Controllers
             await _context.SaveChangesAsync();
 
             await InvalidatePauseCacheAsync(request.TicketId, pause.Id);
-
-
             await InvalidateTicketListCacheAsync();
             await InvalidateTicketDetailCacheAsync(request.TicketId);
+            await InvalidateRecentActivities();
 
             _logger.LogInformation($"Ticket {request.TicketId} paused by user {userId}");
 
             // Return created pause
             var createdPause = await GetPause(pause.Id);
             return CreatedAtAction(nameof(GetPause), new { id = pause.Id }, createdPause.Value);
-
         }
 
         // POST: /api/TicketPauses/{id}/resume
         [HttpPost("{id}/resume")]
         [Authorize(Roles = "Editor,Admin")]
-        public async Task<ActionResult> ResumePause(long id, [FromBody] ResumeTicketPauseRequest request)
+        public async Task<ActionResult> ResumePause(
+            long id,
+            [FromBody] ResumeTicketPauseRequest request
+        )
         {
-            var pause = await _context.TicketPauses
-                .Include(tp => tp.Ticket)
+            var pause = await _context
+                .TicketPauses.Include(tp => tp.Ticket)
                 .FirstOrDefaultAsync(tp => tp.Id == id);
 
             if (pause == null)
@@ -257,7 +264,7 @@ namespace Api.Controllers
                 ToStatus = TicketStatus.OPEN,
                 Notes = request.ResumeNotes ?? "Duraklama sonlandırıldı",
                 PerformedById = userId,
-                PerformedAt = DateTime.UtcNow
+                PerformedAt = DateTime.UtcNow,
             };
 
             _context.TicketActions.Add(action);
@@ -267,6 +274,7 @@ namespace Api.Controllers
 
             await InvalidateTicketListCacheAsync();
             await InvalidateTicketDetailCacheAsync(pause.TicketId);
+            await InvalidateRecentActivities();
 
             _logger.LogInformation($"Pause {id} resumed by user {userId}");
 
@@ -276,7 +284,10 @@ namespace Api.Controllers
         // PUT: /api/TicketPauses/{id}
         [HttpPut("{id}")]
         [Authorize(Roles = "Editor,Admin")]
-        public async Task<ActionResult> UpdatePause(long id, [FromBody] UpdateTicketPauseRequest request)
+        public async Task<ActionResult> UpdatePause(
+            long id,
+            [FromBody] UpdateTicketPauseRequest request
+        )
         {
             var pause = await _context.TicketPauses.FindAsync(id);
 
@@ -289,8 +300,8 @@ namespace Api.Controllers
             await _context.SaveChangesAsync();
             await InvalidatePauseCacheAsync(pause.TicketId, id);
             await InvalidateTicketListCacheAsync();
+            await InvalidateRecentActivities();
             await InvalidateTicketDetailCacheAsync(pause.TicketId);
-
 
             return Ok(new { message = "Pause bilgileri güncellendi" });
         }
@@ -307,11 +318,10 @@ namespace Api.Controllers
 
             var ticketId = pause.TicketId;
 
-
             _context.TicketPauses.Remove(pause);
             await _context.SaveChangesAsync();
             await InvalidatePauseCacheAsync(ticketId, id);
-
+            await InvalidateRecentActivities();
 
             return Ok(new { message = "Pause kaydı silindi" });
         }
@@ -331,6 +341,11 @@ namespace Api.Controllers
         //Helper functions for cache invalidation
         private Task InvalidateTicketDetailCacheAsync(long id) =>
             _cache.RemoveAsync($"tickets:detail:{id}");
+
+        private async Task InvalidateRecentActivities()
+        {
+            await _cache.RemoveAsync("tickets:recent-activities");
+        }
 
         private async Task InvalidateTicketListCacheAsync()
         {

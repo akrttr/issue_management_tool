@@ -872,8 +872,8 @@ public class TicketsController : ControllerBase
             {
                 if (_cache != null)
                 {
-                    await _cache.RemoveAsync($"ticket:detail:{id}");
-                    await _cache.RemoveByPatternAsync("ticket:list:*");
+                    await _cache.RemoveAsync($"tickets:detail:{id}");
+                    await _cache.RemoveByPatternAsync("tickets:list:*");
                     await _cache.RemoveByPatternAsync($"pause:ticket:{id}");
                 }
             }

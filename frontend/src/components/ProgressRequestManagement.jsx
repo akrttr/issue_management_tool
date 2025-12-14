@@ -124,8 +124,7 @@ export default function ProgressRequestManagement({ onViewTicket, onNavigate }) 
             filtered = filtered.filter(group =>
                 group.ticketCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 group.requests.some(r =>
-                    (r.requestMessage && r.requestMessage.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                    r.requestedByUserName.toLowerCase().includes(searchTerm.toLowerCase())
+                    (r.requestMessage && r.requestMessage.toLowerCase().includes(searchTerm.toLowerCase())) 
                 )
             );
         }
@@ -325,7 +324,7 @@ export default function ProgressRequestManagement({ onViewTicket, onNavigate }) 
                 <div style={styles.stats}>
                     <div style={styles.statCard}>
                         <div style={styles.statValue}>{groupedRequests.length}</div>
-                        <div style={styles.statLabel}>Toplam Ticket</div>
+                        <div style={styles.statLabel}>Toplam Sorun</div>
                     </div>
                     <div style={styles.statCard}>
                         <div style={styles.statValue}>{requests.filter(r => !r.isResponded).length}</div>
@@ -333,7 +332,7 @@ export default function ProgressRequestManagement({ onViewTicket, onNavigate }) 
                     </div>
                     <div style={styles.statCard}>
                         <div style={styles.statValue}>{requests.filter(r => r.progressInfo).length}</div>
-                        <div style={styles.statLabel}>Bilgi Bildirilen</div>
+                        <div style={styles.statLabel}>Geri Bildirim Yapılan</div>
                     </div>
                 </div>
             </div>
@@ -344,7 +343,7 @@ export default function ProgressRequestManagement({ onViewTicket, onNavigate }) 
                     <Search size={20} style={styles.searchIcon} />
                     <input
                         type="text"
-                        placeholder="Ticket numarası, mesaj veya kullanıcı ara..."
+                        placeholder="Sorun numarası, mesaj veya kullanıcı ara..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         style={styles.searchInput}

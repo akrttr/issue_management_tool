@@ -266,7 +266,11 @@ namespace Api.Controllers
 
             _logger.LogInformation($"Progress updated for request {id} by user {userId}");
             await InvalidateTicketListCacheAsync();
-            await InvalidateTicketDetailCacheAsync(id);
+
+            _logger.LogInformation($"WTF________________x_____________{progressRequest.TicketId}");
+            await InvalidateTicketDetailCacheAsync(progressRequest.TicketId);
+            await InvalidateRecentActivities();
+            _logger.LogInformation($"WTF________________z____________{progressRequest.TicketId}");
             return Ok(new { message = "Bilgi talebi güncellendi" });
         }
 
@@ -335,6 +339,7 @@ namespace Api.Controllers
 
             await InvalidateTicketListCacheAsync();
             await InvalidateTicketDetailCacheAsync(id);
+            await InvalidateRecentActivities();
 
             _logger.LogInformation($"Progress request {id} responded by user {userId}");
 
@@ -355,6 +360,7 @@ namespace Api.Controllers
             await _context.SaveChangesAsync();
             await InvalidateTicketListCacheAsync();
             await InvalidateTicketDetailCacheAsync(id);
+            await InvalidateRecentActivities();
 
             return Ok(new { message = "Talep iptal edildi" });
         }
@@ -377,6 +383,11 @@ namespace Api.Controllers
 
         private Task InvalidateTicketDetailCacheAsync(long id) =>
             _cache.RemoveAsync($"tickets:detail:{id}");
+
+        private async Task InvalidateRecentActivities()
+        {
+            await _cache.RemoveAsync("tickets:recent-activities");
+        }
 
         private async Task InvalidateTicketListCacheAsync()
         {

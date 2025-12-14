@@ -3,12 +3,12 @@ import { Clock, AlertCircle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-
 import { progressRequestsAPI, notificationsAPI } from '../../services/api';
 import { showConfirmToast } from './ConfirmToast';
 import { toast } from 'react-toastify';
+import UpdateHistoryTable from './UpdateHistoryTable';
 
 export default function ProgressRequestButton({ ticketId, ticketExternalCode, ticketCreatedByUserId, onNavigate }) {
     const [progressRequests, setProgressRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showHistory, setShowHistory] = useState(false);
-    debugger;
 
     useEffect(() => {
         if (ticketId) {
@@ -20,7 +20,6 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
         try {
             setLoading(true);
             const response = await progressRequestsAPI.getByTicket(ticketId);
-            debugger;
             setProgressRequests(response.data || []);
         } catch (error) {
             console.error('Error loading progress requests:', error);
@@ -44,7 +43,7 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
             });
 
             toast.success('Bilgi talebi gönderildi');
-            loadProgressRequests(); // Reload to show new request
+            loadProgressRequests();
         } catch (error) {
             console.error('Error requesting progress:', error);
             toast.error('Bilgi talebi gönderilemedi');
@@ -62,7 +61,7 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
 
     // Get finalized requests
     const finalizedRequests = progressRequests.filter(pr => 
-        pr.status === 'Responded' || pr.status === 'Cancelled'
+        pr.status === 'Responded' || pr.status !== 'Cancelled'
     );
 
     const hasPendingRequest = pendingRequests.length > 0;
@@ -114,14 +113,14 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
         <div style={styles.container}>
             <h3 style={styles.title}>Bilgi Talebi</h3>
 
-            {/* STATE 1: Pending Request Exists - Show "Waiting" Button */}
+            {/* STATE 1: Pending Request Exists */}
             {hasPendingRequest && (
                 <div style={styles.pendingSection}>
                     <button
                         onClick={handleNavigateToRequests}
                         style={styles.waitingButton}
                     >
-                        <Clock size={16} style={{ animation: 'spin 2s linear infinite' }} />
+                        <Clock size={16} />
                         Bilgi Bekleniyor...
                     </button>
 
@@ -149,7 +148,32 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
                                         <div style={styles.progressInfo}>
                                             <span style={styles.detailLabel}>Son Durum:</span>
                                             <p style={styles.progressText}>{request.progressInfo}</p>
+                                            {request.progressPercentage !== null && (
+                                                <div style={styles.progressBarContainer}>
+                                                    <div style={styles.progressBar}>
+                                                        <div 
+                                                            style={{
+                                                                ...styles.progressFill,
+                                                                width: `${request.progressPercentage}%`
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <span style={styles.progressPercentage}>
+                                                        %{request.progressPercentage}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
+                                    )}
+
+                                    {/* ✨ NEW: Update History Table Component */}
+                                    {request.updates && request.updates.length > 0 && (
+                                        <UpdateHistoryTable
+                                            updates={request.updates}
+                                            requestId={request.id}
+                                            updateCount={request.updates.length}
+                                            compact={true}
+                                        />
                                     )}
                                 </div>
                             </div>
@@ -163,10 +187,9 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
                 </div>
             )}
 
-            {/* STATE 2 & 3: No Pending Request - Show History (if any) and New Request Button */}
+            {/* STATE 2 & 3: No Pending Request */}
             {!hasPendingRequest && (
                 <>
-                    {/* Show History if exists */}
                     {hasHistory && (
                         <div style={styles.historySection}>
                             <button
@@ -194,7 +217,32 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
                                                 <div style={styles.historyResponse}>
                                                     <span style={styles.detailLabel}>Yanıt:</span>
                                                     <p style={styles.historyResponseText}>{request.progressInfo}</p>
+                                                    {request.progressPercentage !== null && (
+                                                        <div style={styles.progressBarContainer}>
+                                                            <div style={styles.progressBar}>
+                                                                <div 
+                                                                    style={{
+                                                                        ...styles.progressFill,
+                                                                        width: `${request.progressPercentage}%`
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <span style={styles.progressPercentage}>
+                                                                %{request.progressPercentage}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            )}
+
+                                            {/* ✨ NEW: Update History Table Component */}
+                                            {request.updates && request.updates.length > 0 && (
+                                                <UpdateHistoryTable
+                                                    updates={request.updates}
+                                                    requestId={request.id}
+                                                    updateCount={request.updates.length}
+                                                    compact={true}
+                                                />
                                             )}
                                         </div>
                                     ))}
@@ -203,7 +251,6 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
                         </div>
                     )}
 
-                    {/* New Request Button */}
                     <button
                         onClick={handleRequestProgress}
                         style={styles.newRequestButton}
@@ -217,6 +264,7 @@ export default function ProgressRequestButton({ ticketId, ticketExternalCode, ti
     );
 }
 
+// ... keep all your existing styles ...
 const styles = {
     container: {
         marginTop: '1.5rem',
@@ -236,8 +284,6 @@ const styles = {
         color: '#999',
         fontStyle: 'italic',
     },
-    
-    // Pending Request Styles
     pendingSection: {
         display: 'flex',
         flexDirection: 'column',
@@ -305,10 +351,34 @@ const styles = {
         borderTop: '1px solid #ffd54f',
     },
     progressText: {
-        margin: '0.25rem 0 0 0',
+        margin: '0.25rem 0',
         fontSize: '0.85rem',
         color: '#555',
         fontStyle: 'italic',
+    },
+    progressBarContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        marginTop: '0.5rem',
+    },
+    progressBar: {
+        flex: 1,
+        height: '20px',
+        backgroundColor: '#e0e0e0',
+        borderRadius: '10px',
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: '#4caf50',
+        transition: 'width 0.3s',
+    },
+    progressPercentage: {
+        fontSize: '0.75rem',
+        fontWeight: '600',
+        color: '#333',
+        minWidth: '45px',
     },
     infoMessage: {
         display: 'flex',
@@ -321,8 +391,6 @@ const styles = {
         fontSize: '0.85rem',
         color: '#f57c00',
     },
-
-    // History Styles
     historySection: {
         marginBottom: '1rem',
     },
@@ -375,13 +443,11 @@ const styles = {
         borderTop: '1px solid #e0e0e0',
     },
     historyResponseText: {
-        margin: '0.25rem 0 0 0',
+        margin: '0.25rem 0',
         fontSize: '0.85rem',
         color: '#555',
         fontStyle: 'italic',
     },
-
-    // New Request Button
     newRequestButton: {
         display: 'flex',
         alignItems: 'center',
@@ -398,8 +464,6 @@ const styles = {
         transition: 'all 0.2s',
         boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)',
     },
-
-    // Status Badge
     statusBadge: {
         display: 'inline-flex',
         alignItems: 'center',

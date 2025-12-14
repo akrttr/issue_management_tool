@@ -78,7 +78,7 @@ export default function RecentActivitiesTimeline({ onTicketClick }) {
         const actionLabels = {
             'Create': 'Arıza oluşturuldu',
             'Edit': 'Arıza güncellendi',
-            'Comment': 'Yorum eklendi',
+            'Comment': 'İşlem Eklendi',
             'StatusChange': 'Durum değişti'
         };
 

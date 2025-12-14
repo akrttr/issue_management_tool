@@ -276,7 +276,7 @@ export default function PauseManagement({ onViewTicket, onNavigate }) {
                 <div style={styles.stats}>
                     <div style={styles.statCard}>
                         <div style={styles.statValue}>{groupedPauses.length}</div>
-                        <div style={styles.statLabel}>Toplam Ticket</div>
+                        <div style={styles.statLabel}>Toplam Sorun</div>
                     </div>
                     <div style={styles.statCard}>
                         <div style={styles.statValue}>{pauses.filter(p => p.isActive).length}</div>
@@ -297,7 +297,7 @@ export default function PauseManagement({ onViewTicket, onNavigate }) {
                     <Search size={20} style={styles.searchIcon} />
                     <input
                         type="text"
-                        placeholder="Ticket numarası, sebep veya kullanıcı ara..."
+                        placeholder="Sorun numarası, sebep veya kullanıcı ara..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         style={styles.searchInput}

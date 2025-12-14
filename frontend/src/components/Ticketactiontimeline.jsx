@@ -53,7 +53,7 @@ export default function TicketActionTimeline({ actions }) {
         const actionLabels = {
             'Create': 'Arıza Oluşturuldu',
             'Edit': 'Güncelleme Yapıldı',
-            'Comment': 'Yorum Eklendi',
+            'Comment': 'İşlem Eklendi',
             'StatusChange': 'Durum Değişikliği'
         };
 
