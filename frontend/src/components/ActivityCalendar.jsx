@@ -55,15 +55,30 @@ export default function ActivityCalendar({ onNavigate }) {
         return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1; // 1..366
     };
 
-    // Get activities for a specific date
-    const getActivitiesForDate = (date) => {
-        const dateStr = date.toISOString().split('T')[0];
-
-        return activities.filter(activity => {
-            const activityDate = new Date(activity.performedAt).toISOString().split('T')[0];
-            return activityDate === dateStr;
-        });
+    const getLocalDateString = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
+
+
+    // Get activities for a specific date
+   const getActivitiesForDate = (date) => {
+    const dateStr = getLocalDateString(date);
+    // Calendar date: Dec 14, 2025
+    // dateStr: "2025-12-14"  ✅ Correct!
+    
+    return activities.filter(activity => {
+        const activityDate = new Date(activity.performedAt);
+        const activityDateStr = getLocalDateString(activityDate);
+        // Activity: "2025-12-14T09:46:12.74277Z" (UTC)
+        // Converted to local: Dec 14, 2025 12:46 PM (Ankara)
+        // activityDateStr: "2025-12-14"  ✅ Correct!
+        
+        return activityDateStr === dateStr;  // "2025-12-14" === "2025-12-14"  ✅
+    });
+};
 
     // Get action type label
     const getActionLabel = (actionType) => {
@@ -71,7 +86,7 @@ export default function ActivityCalendar({ onNavigate }) {
             'Create': 'Oluşturuldu',
             'Edit': 'Güncellendi',
             'StatusChange': 'Durum Değişti',
-            'Comment': 'Yorum Eklendi'
+            'Comment': 'İşlem Eklendi'
         };
         return labels[actionType] || actionType;
     };
@@ -344,7 +359,7 @@ const styles = {
         gap: '1rem',
     },
     title: {
-        fontSize: '1.8rem',
+        fontSize: '1.5rem',
         fontWeight: '600',
         color: '#333',
         margin: 0,
@@ -430,7 +445,7 @@ const styles = {
         borderRight: '1px solid #e0e0e0',
     },
     dayCell: {
-        minHeight: '140px',
+        minHeight: '120px',
         padding: '0.75rem',
         borderRight: '1px solid #e0e0e0',
         backgroundColor: 'white',
@@ -455,18 +470,18 @@ const styles = {
     activitiesContainer: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.35rem',
+        gap: '0.20rem',
     },
     activityItem: {
         padding: '0.4rem 0.6rem',
         backgroundColor: '#f9f9f9',
         borderRadius: '4px',
-        fontSize: '0.75rem',
+        fontSize: '0.60rem',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '0.5rem',
+        gap: '0.4rem',
         borderLeft: '3px solid #667eea',
         transition: 'all 0.2s',
         '&:hover': {

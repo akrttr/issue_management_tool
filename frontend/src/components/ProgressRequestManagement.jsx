@@ -175,7 +175,6 @@ export default function ProgressRequestManagement({ onViewTicket, onNavigate }) 
     };
 
     const toggleExpand = (ticketId) => {
-        debugger;
         setExpandedTickets(prev => {
             const newSet = new Set(prev);
             if (newSet.has(ticketId)) {
