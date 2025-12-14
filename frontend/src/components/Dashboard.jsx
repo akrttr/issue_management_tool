@@ -3,12 +3,13 @@ import { dashboardAPI, ticketsAPI } from "../../services/api";
 import {
     LineChart, Line, XAxis,
     YAxis, CartesianGrid, Tooltip,
-    Legend, ResponsiveContainer, BarChart, Bar
+    Legend, ResponsiveContainer, BarChart, Bar, Pie, PieChart, Cell,
 } from "recharts";
 
 
 
-import { Clock, CheckCircle, AlertCircle, Box,Users, Network } from "lucide-react";
+import { Clock, CheckCircle, AlertCircle, Box, Users, Network, Activity, TrendingUp } from "lucide-react";
+
 import RecentActivitiesTimeline from './RecentctivitiesTimeline.jsx';
 
 export default function Dashboard({ onCreateTicket, onNavigate }) {
@@ -20,6 +21,8 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
     const [systemStats, setSystemStats] = useState([]);
     const [subsystemStats, setSubsystemStats] = useState([]);
     const [ciStats, setCiStats] = useState([]);
+    const [activities, setActivities] = useState([]);
+
 
     const STATUS_LABELS = {
         'OPEN': 'Açık',
@@ -40,15 +43,17 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
             setLoading(true);
             const [dashResponse, allTicketRespons] = await Promise.all([
                 dashboardAPI.getStats(),
-                ticketsAPI.getAll()
+                ticketsAPI.getAll(),
+
             ]);
+            const response = await ticketsAPI.getRecentActivities(500);
+            setActivities(response.data || []);
             setStats(dashResponse.data.statusCounts);
             setOngoingTickets(dashResponse.data.ongoingTickets);
-
-
             if (dashResponse.data.systemStats) setSystemStats(dashResponse.data.systemStats);
             if (dashResponse.data.subsystemStats) setSubsystemStats(dashResponse.data.subsystemStats);
             if (dashResponse.data.ciStats) setCiStats(dashResponse.data.ciStats);
+
 
             // Get recent tickets (sorted by Date Created )
             const allTickets = allTicketRespons.data.items || allTicketRespons.data;
@@ -81,6 +86,37 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
         color: getStatusColor(status),
     });
 
+    const getActivitySummary = () => {
+        return {
+            total: activities.length,
+            creates: activities.filter(a => a.actionType === 'Create').length,
+            statusChanges: activities.filter(a => a.actionType === 'StatusChange').length,
+            comments: activities.filter(a => a.actionType === 'Comment').length,
+            edits: activities.filter(a => a.actionType === 'Edit').length,
+        };
+    };
+
+    const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+        const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+        const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+
+        return (
+            <text
+                x={x}
+                y={y}
+                fill="white"
+                textAnchor={x > cx ? 'start' : 'end'}
+                dominantBaseline="central"
+                style={{ fontSize: '14px', fontWeight: 'bold' }}
+            >
+                {`${(percent * 100).toFixed(0)}%`}
+            </text>
+        );
+    };
+
+    const activitySummary = getActivitySummary();
+
     // Prepare chart data from stats 
 
     // const chartData = Object.entries(stats).map(([status, count]) => ({
@@ -96,6 +132,28 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
 
     const userName = localStorage.getItem("displayName");
     const userRole = localStorage.getItem("role");
+
+    const getFullSummary = () => {
+
+
+        return {
+            total: activities.length,
+            creates: activities.filter(a => a.actionType === 'Create').length,
+            statusChanges: activities.filter(a => a.actionType === 'StatusChange').length,
+            comments: activities.filter(a => a.actionType === 'Comment').length,
+            edits: activities.filter(a => a.actionType === 'Edit').length,
+        };
+    };
+
+    const summary = getFullSummary();
+
+
+    const activityChartData = [
+        { name: 'Yeni Arıza', value: activitySummary.creates, color: '#4caf50' },
+        { name: 'Durum Değişikliği', value: activitySummary.statusChanges, color: '#667eea' },
+        { name: 'İşlem', value: activitySummary.comments, color: '#2196f3' },
+        { name: 'Güncelleme', value: activitySummary.edits, color: '#ff9800' },
+    ];
 
 
     if (loading) {
@@ -179,7 +237,106 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
                 </div>
             </div>
 
-            
+            <div style={styles.activitySummarySection}>
+                <h3 style={styles.sectionTitle}>
+                    <Activity size={20} />
+                    Tüm Aktivitelerin Özeti
+                </h3>
+                <br />
+                <div style={styles.activitySummaryGrid}>
+                    <div style={styles.summaryContainer}>
+                        <div style={styles.summaryCard}>
+                            <Activity size={20} style={{ color: '#667eea' }} />
+                            <div>
+                                <div style={styles.summaryValue}>{summary.total}</div>
+                                <div style={styles.summaryLabel}>Toplam Aktivite</div>
+                            </div>
+                        </div>
+                        <div style={styles.summaryCard}>
+                            <div style={{ ...styles.summaryDot, backgroundColor: '#4caf50' }} />
+                            <div>
+                                <div style={styles.summaryValue}>{summary.creates}</div>
+                                <div style={styles.summaryLabel}>Yeni Arıza</div>
+                            </div>
+                        </div>
+                        <div style={styles.summaryCard}>
+                            <div style={{ ...styles.summaryDot, backgroundColor: '#667eea' }} />
+                            <div>
+                                <div style={styles.summaryValue}>{summary.statusChanges}</div>
+                                <div style={styles.summaryLabel}>Durum Değişikliği</div>
+                            </div>
+                        </div>
+                        <div style={styles.summaryCard}>
+                            <div style={{ ...styles.summaryDot, backgroundColor: '#2196f3' }} />
+                            <div>
+                                <div style={styles.summaryValue}>{summary.comments}</div>
+                                <div style={styles.summaryLabel}>İşlem</div>
+                            </div>
+                        </div>
+                        <div style={styles.summaryCard}>
+                            <div style={{ ...styles.summaryDot, backgroundColor: '#ff9800' }} />
+                            <div>
+                                <div style={styles.summaryValue}>{summary.edits}</div>
+                                <div style={styles.summaryLabel}>Güncelleme</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                 {/* Activity Charts - Bar and Pie */}
+            <div style={styles.chartsRow}>
+                {/* Activity Bar Chart */}
+                <div style={styles.chartCard}>
+                    <h3 style={styles.cardTitle}>
+                        <TrendingUp size={18} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+                        Aktivite Türlerine Göre Dağılım
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={activityChartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                                {activityChartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Activity Pie Chart */}
+                <div style={styles.chartCard}>
+                    <h3 style={styles.cardTitle}>
+                        <Activity size={18} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+                        Aktivite Yoğunluk Dağılımı                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                            <Pie
+                                data={activityChartData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                label={renderCustomLabel}
+                                outerRadius={100}
+                                fill="#8884d8"
+                                dataKey="value"
+                            >
+                                {activityChartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            </div>
+
+
 
             {(systemStats.length > 0 || subsystemStats.length > 0 || ciStats.length > 0) && (
                 <div style={styles.hierarchyStatsRow}>
@@ -222,6 +379,7 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
                             </ResponsiveContainer>
                         </div>
                     )}
+              
 
                     {/* CI Stats */}
                     {ciStats.length > 0 && (
@@ -244,7 +402,7 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
                     )}
                 </div>
             )}
-            
+
             {/* Two Column Layout */}
             <div style={styles.contentGrid}>
                 {/* Ongoing Tickets */}
@@ -260,11 +418,11 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
                             ongoingTickets.map((ticket) => (
                                 <div key={ticket.id} style={styles.taskItem}>
                                     <div style={styles.taskLeft}>
-                                        
+
                                         <div>
                                             <div style={styles.taskTitle}>{ticket.externalCode}</div>
                                             <div style={styles.taskMeta}>
-                                                {ticket.title}  <br/>    {new Date(ticket.createdAt).toLocaleDateString()}
+                                                {ticket.title}  <br />    {new Date(ticket.createdAt).toLocaleDateString()}
                                             </div>
                                         </div>
                                     </div>
@@ -287,41 +445,41 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
 
                 {/* Recent Tickets */}
                 <RecentActivitiesTimeline
-                                                        onTicketClick={(ticketId) => {
-                                                            if (ticketId !== ticket?.id) {
-                                                                // Optionally close current and open new ticket
-                                                                console.log('Navigate to ticket:', ticketId);
-                                                            }
-                                                        }}
-                                                    />
+                    onTicketClick={(ticketId) => {
+                        if (ticketId !== ticket?.id) {
+                            // Optionally close current and open new ticket
+                            console.log('Navigate to ticket:', ticketId);
+                        }
+                    }}
+                />
                 {/* Charts Row */}
-            <div style={styles.chartsRow}>
-                <div style={styles.chartCard}>
-                    <h3 style={styles.cardTitle}>Durumuna göre sorunlar</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip />
-                            <Bar dataKey="count" fill="#667eea" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+                <div style={styles.chartsRow}>
+                    <div style={styles.chartCard}>
+                        <h3 style={styles.cardTitle}>Durumuna göre sorunlar</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" />
+                                <YAxis />
+                                <Tooltip />
+                                <Bar dataKey="count" fill="#667eea" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
 
-                <div style={styles.chartCard}>
-                    <h3 style={styles.cardTitle}>Sorun Eğilimleri</h3>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <LineChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip />
-                            <Line type="monotone" dataKey="count" stroke="#4caf50" strokeWidth={2} />
-                        </LineChart>
-                    </ResponsiveContainer>
+                    <div style={styles.chartCard}>
+                        <h3 style={styles.cardTitle}>Sorun Eğilimleri</h3>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" />
+                                <YAxis />
+                                <Tooltip />
+                                <Line type="monotone" dataKey="count" stroke="#4caf50" strokeWidth={2} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
-            </div>
                 <div style={styles.card}>
                     <div style={styles.cardHeader}>
                         <h3 style={styles.cardTitle}>Son Açılan Sorunlar</h3>
@@ -345,7 +503,7 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
                                     <div>
                                         <div style={styles.taskTitle}>{ticket.externalCode}</div>
                                         <div style={styles.taskMeta}>
-                                            {ticket.title} <br/>
+                                            {ticket.title} <br />
                                             {new Date(ticket.createdAt).toLocaleDateString()}
                                         </div>
                                     </div>
@@ -359,7 +517,7 @@ export default function Dashboard({ onCreateTicket, onNavigate }) {
                 </div>
             </div>
 
-            
+
 
 
         </div>
@@ -593,5 +751,52 @@ const styles = {
         background: 'white',
         color: '#667eea',
         border: '2px solid #667eea',
+    },
+    activitySummarySection: {
+        marginBottom: '2rem',
+    },
+    activitySummaryGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+    },
+    activitySummaryCard: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem',
+        padding: '1rem',
+        backgroundColor: '#fff',
+        borderRadius: '8px',
+        border: '1px solid #e0e0e0',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    },
+    summaryContainer: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+        marginBottom: '2rem',
+    },
+    summaryCard: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem',
+        padding: '1rem',
+        backgroundColor: '#f9f9f9',
+        borderRadius: '8px',
+        border: '1px solid #e0e0e0',
+    },
+    summaryDot: {
+        width: '20px',
+        height: '20px',
+        borderRadius: '50%',
+    },
+    summaryValue: {
+        fontSize: '1.5rem',
+        fontWeight: '700',
+        color: '#333',
+    },
+    summaryLabel: {
+        fontSize: '0.85rem',
+        color: '#666',
     },
 };

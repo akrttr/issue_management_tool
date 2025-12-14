@@ -162,8 +162,7 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
     const [newComment, setNewComment] = useState('');
     const [comments, setComments] = useState([]);
     const [actions, setActions] = useState([]);
-    // const [activeTab, setActiveTab] = useState('details');
-    const [activeTab, setActiveTab] = useState('history');
+    const [activeTab, setActiveTab] = useState('comments');
 
 
 
@@ -1300,16 +1299,7 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
                                     </button>
                                 )}
 
-                                <button
-                                    onClick={() => setActiveTab('history')}
-                                    style={{
-                                        ...styles.tab,
-                                        ...(activeTab === 'history' ? styles.activeTab : {})
-                                    }}
-                                >
-                                    <History size={16} />
-                                    Tarihçe ({actions.length})
-                                </button>
+
 
                             </div>
 
@@ -1356,43 +1346,7 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
                                 </div>
                             )}
 
-                            {/* History Tab */}
-                            {activeTab === 'history' && (
-                                <div style={styles.tabContent}>
-                                    <div style={styles.historyContainer}>
-                                        {actions.length === 0 ? (
-                                            <p style={styles.emptyMessage}>Henüz tarihçe kaydı yok</p>
-                                        ) : (
-                                            actions.map((action) => (
-                                                <div key={action.id} style={styles.historyItem}>
-                                                    <div style={styles.historyDot} />
-                                                    <div style={styles.historyContent}>
-                                                        <div style={styles.historyHeader}>
-                                                            <span style={styles.historyAction}>
-                                                                {action.actionType}
-                                                            </span>
-                                                            {action.fromStatus && action.toStatus && (
-                                                                <span style={styles.historyStatus}>
-                                                                    {action.fromStatus} → {action.toStatus}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div style={styles.historyMeta}>
-                                                            <span>{action.performedByName}</span>
-                                                            <span style={styles.historyDate}>
-                                                                {new Date(action.performedAt).toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                        {action.notes && (
-                                                            <div style={styles.historyNotes}>{action.notes}</div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                           
                             {ticket && (
                                 <div style={styles.formSection}>
                     

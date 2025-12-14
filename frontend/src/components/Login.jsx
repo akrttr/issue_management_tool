@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { authAPI } from "../../services/api.jsx";
 import { toast } from "react-toastify";
 
+
+
+
 import "./Login.css";
 
 export default function Login({ onLogin }) {
@@ -84,12 +87,12 @@ export default function Login({ onLogin }) {
       onLogin(response.data);
     } catch (err) {
       if (!err.response) {
-            // Network error - backend is offline
-            setError("Sistem çevrimdışı. Lütfen daha sonra tekrar deneyin.");
-        } else {
-            // Server responded with an error
-            setError(err.response?.data?.message || "Giriş başarısız");
-        }
+        // Network error - backend is offline
+        setError("Sistem çevrimdışı. Lütfen daha sonra tekrar deneyin.");
+      } else {
+        // Server responded with an error
+        setError(err.response?.data?.message || "Giriş başarısız");
+      }
     } finally {
       setLoading(false);
     }
