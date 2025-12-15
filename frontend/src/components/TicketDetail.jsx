@@ -523,7 +523,7 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
                             style={{ ...styles.button, ...styles.pdfButton }}
                             title="PDF Rapor Al"
                         >
-                            <Download size={16} />
+                            <Download size={16}  />
                             PDF Rapor
                         </button>
                     )}

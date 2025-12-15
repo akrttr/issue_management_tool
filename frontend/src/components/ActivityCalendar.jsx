@@ -359,7 +359,7 @@ const styles = {
         gap: '1rem',
     },
     title: {
-        fontSize: '1.5rem',
+        fontSize: '1.8rem',
         fontWeight: '600',
         color: '#333',
         margin: 0,
@@ -445,7 +445,7 @@ const styles = {
         borderRight: '1px solid #e0e0e0',
     },
     dayCell: {
-        minHeight: '120px',
+        minHeight: '140px',
         padding: '0.75rem',
         borderRight: '1px solid #e0e0e0',
         backgroundColor: 'white',
@@ -470,18 +470,18 @@ const styles = {
     activitiesContainer: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.20rem',
+        gap: '0.35rem',
     },
     activityItem: {
         padding: '0.4rem 0.6rem',
         backgroundColor: '#f9f9f9',
         borderRadius: '4px',
-        fontSize: '0.60rem',
+        fontSize: '0.65rem',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '0.4rem',
+        gap: '0.5rem',
         borderLeft: '3px solid #667eea',
         transition: 'all 0.2s',
         '&:hover': {
