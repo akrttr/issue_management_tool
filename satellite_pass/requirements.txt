@@ -1,8 +1,12 @@
-Flask==3.0.3
-psycopg2-binary==2.9.10
 python-dotenv==1.0.1
-skyfield==1.49
 sgp4==2.23
 numpy==2.1.2
 PyJWT==2.9.0
-flask-cors
+flask==3.0.0
+flask-cors==4.0.0
+psycopg2-binary==2.9.9
+skyfield==1.48
+requests==2.31.0
+python-dateutil==2.8.2
+APScheduler==3.10.4
+gunicorn==21.2.0

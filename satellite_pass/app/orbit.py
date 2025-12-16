@@ -1,155 +1,170 @@
-from datetime import datetime, timedelta, date as date_cls, timezone
-from typing import List, Dict, Any
-
+from skyfield.api import load, wgs84, EarthSatellite
+from datetime import datetime, timedelta
 import numpy as np
-from skyfield.api import EarthSatellite, load, wgs84
-from .config import Config
+from .db import db
 
-
-ts = load.timescale()
-
-def _satellite_from_tle(line1: str, line2: str) -> EarthSatellite:
-    return EarthSatellite(line1, line2, "sat", ts)
-
-def _time_range_for_day(day: date_cls, step_seconds: int = 30):
-    """Generate Skyfield Time objects for a given UTC day."""
-    start_dt = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=timezone.utc)
-
-    dt_list = []
-    for i in range(0, 24 * 3600, step_seconds):
-        dt_list.append(start_dt + timedelta(seconds=i))
-
-    # Skyfield can take a list of timezone-aware datetimes
-    skyfield_times = ts.from_datetimes(dt_list)
-
-    return dt_list, skyfield_times
-
-
-def compute_passes_and_track(line1: str, line2: str, day: date_cls) -> Dict[str, Any]:
-    """
-    Returns:
-      {
-        "samples": [
-          {
-            "time": iso,
-            "lat": float,
-            "lon": float,
-            "elev_deg": float,
-            "visible_from_ankara": bool
-          },
-          ...
-        ],
-        "passes": [
-          { "start": iso, "end": iso, "max_elev_deg": float },
-          ...
-        ]
-      }
-    """
-    sat = _satellite_from_tle(line1, line2)
-    ankara = wgs84.latlon(Config.ANKARA_LAT, Config.ANKARA_LON)
-
-    python_times, skyfield_times = _time_range_for_day(day, step_seconds=30)
-
-    # satellite position in time
-    geocentric = sat.at(skyfield_times)
-
-    # subpoint
-    subpoint = wgs84.subpoint(geocentric)
-    lats = subpoint.latitude.degrees
-    lons = subpoint.longitude.degrees
-
-    # elevation from Ankara
-    difference = sat - ankara
-    topocentric = difference.at(skyfield_times)
-    alt, az, distance = topocentric.altaz()
-    elev_deg = alt.degrees
-
-    samples = []
-    for dt, lat, lon, elev in zip(python_times, lats, lons, elev_deg):
-        samples.append({
-            "time": dt.replace(tzinfo=None).isoformat() + "Z",
-            "lat": float(lat),
-            "lon": float(lon),
-            "elev_deg": float(elev),
-            "visible_from_ankara": elev >= Config.MIN_ELEV_DEG,
-        })
-
-    # detect passes where elevation > threshold
-    passes = []
-    in_pass = False
-    pass_start = None
-    max_elev = -90.0
-    max_elev_time = None
-
-    for s in samples:
-        visible = s["visible_from_ankara"]
-        if visible and not in_pass:
-            in_pass = True
-            pass_start = s["time"]
-            max_elev = s["elev_deg"]
-            max_elev_time = s["time"]
-        elif visible and in_pass:
-            if s["elev_deg"] > max_elev:
-                max_elev = s["elev_deg"]
-                max_elev_time = s["time"]
-        elif not visible and in_pass:
-            # pass ended at previous sample
-            in_pass = False
-            passes.append({
-                "start": pass_start,
-                "end": s["time"],
-                "max_elev_deg": max_elev,
-                "max_elev_time": max_elev_time,
+class OrbitCalculator:
+    """Calculate satellite orbits and ground tracks using Skyfield"""
+    
+    def __init__(self):
+        # Load timescale
+        self.ts = load.timescale()
+    
+    def create_satellite(self, line1, line2, name="Satellite"):
+        """Create Skyfield satellite object from TLE"""
+        return EarthSatellite(line1, line2, name, self.ts)
+    
+    def calculate_ground_track(self, satellite_name, start_time, duration_hours=24, step_minutes=1):
+        """
+        Calculate satellite ground track
+        
+        Args:
+            satellite_name: Name of satellite
+            start_time: datetime object for start
+            duration_hours: How many hours to calculate
+            step_minutes: Time step in minutes
+            
+        Returns:
+            List of dicts with {time, lat, lng, alt, velocity}
+        """
+        # Get latest TLE
+        tle = db.get_latest_tle(satellite_name)
+        if not tle:
+            raise ValueError(f"No TLE found for satellite '{satellite_name}'")
+        
+        # Create satellite
+        sat = self.create_satellite(tle['line1'], tle['line2'], satellite_name)
+        
+        # Generate time range
+        times = []
+        current = start_time
+        end_time = start_time + timedelta(hours=duration_hours)
+        
+        while current <= end_time:
+            times.append(current)
+            current += timedelta(minutes=step_minutes)
+        
+        # Convert to Skyfield times
+        t = self.ts.utc(
+            [dt.year for dt in times],
+            [dt.month for dt in times],
+            [dt.day for dt in times],
+            [dt.hour for dt in times],
+            [dt.minute for dt in times],
+            [dt.second for dt in times]
+        )
+        
+        # Calculate positions
+        geocentric = sat.at(t)
+        subpoint = wgs84.subpoint(geocentric)
+        
+        # Calculate velocity
+        velocity = geocentric.velocity.km_per_s
+        speed = np.sqrt(
+            velocity[0]**2 + velocity[1]**2 + velocity[2]**2
+        )
+        
+        # Build result
+        track = []
+        for i, time in enumerate(times):
+            track.append({
+                'time': time.isoformat() + 'Z',
+                'lat': subpoint.latitude.degrees[i],
+                'lng': subpoint.longitude.degrees[i],
+                'alt': subpoint.elevation.km[i],
+                'velocity': float(speed[i])
             })
-
-    return {"samples": samples, "passes": passes}
-
-def build_geojson_segments(data: Dict[str, Any], now: datetime) -> Dict[str, Any]:
-    """
-    Convert samples + passes into GeoJSON segments: past, current_visible, future.
-    """
-    samples = data["samples"]
-
-    # classify per-sample in time
-    coords_past = []
-    coords_current = []
-    coords_future = []
-
-    for s in samples:
-        t = datetime.fromisoformat(s["time"].replace("Z", ""))
-        coord = [s["lon"], s["lat"]]  # lon, lat
-        if t < now:
-            coords_past.append(coord)
-        else:
-            coords_future.append(coord)
-
-        if s["visible_from_ankara"]:
-            # treat visible samples separately for highlighting
-            coords_current.append(coord)
-
-    def make_feature(coords, segment_name):
-        if not coords:
-            return None
+        
+        return track
+    
+    def calculate_passes(self, satellite_name, observer_lat, observer_lng, observer_alt_m, 
+                        start_time, duration_hours=24, min_elevation=10):
+        """
+        Calculate satellite passes over a ground station
+        
+        Args:
+            satellite_name: Name of satellite
+            observer_lat: Observer latitude in degrees
+            observer_lng: Observer longitude in degrees
+            observer_alt_m: Observer altitude in meters
+            start_time: datetime object for start
+            duration_hours: How many hours to calculate
+            min_elevation: Minimum elevation angle in degrees
+            
+        Returns:
+            List of pass dicts with start, end, max_elevation, etc.
+        """
+        # Get latest TLE
+        tle = db.get_latest_tle(satellite_name)
+        if not tle:
+            raise ValueError(f"No TLE found for satellite '{satellite_name}'")
+        
+        # Create satellite and observer
+        sat = self.create_satellite(tle['line1'], tle['line2'], satellite_name)
+        observer = wgs84.latlon(observer_lat, observer_lng, elevation_m=observer_alt_m)
+        
+        # Time range
+        t0 = self.ts.from_datetime(start_time)
+        t1 = self.ts.from_datetime(start_time + timedelta(hours=duration_hours))
+        
+        # Find passes
+        t, events = sat.find_events(observer, t0, t1, altitude_degrees=min_elevation)
+        
+        # Group events into passes
+        passes = []
+        current_pass = {}
+        
+        for ti, event in zip(t, events):
+            dt = ti.utc_datetime()
+            
+            if event == 0:  # Rise
+                current_pass = {
+                    'start': dt.isoformat() + 'Z',
+                    'rise_azimuth': None
+                }
+            elif event == 1:  # Culmination (max elevation)
+                if current_pass:
+                    # Calculate elevation and azimuth at culmination
+                    difference = sat.at(ti) - observer.at(ti)
+                    topocentric = difference.altaz()
+                    
+                    current_pass['max_elevation'] = float(topocentric[0].degrees)
+                    current_pass['max_elevation_time'] = dt.isoformat() + 'Z'
+                    current_pass['azimuth'] = float(topocentric[1].degrees)
+            elif event == 2:  # Set
+                if current_pass:
+                    current_pass['end'] = dt.isoformat() + 'Z'
+                    current_pass['set_azimuth'] = None
+                    passes.append(current_pass)
+                    current_pass = {}
+        
+        return passes
+    
+    def get_current_position(self, satellite_name):
+        """Get current satellite position"""
+        # Get latest TLE
+        tle = db.get_latest_tle(satellite_name)
+        if not tle:
+            raise ValueError(f"No TLE found for satellite '{satellite_name}'")
+        
+        # Create satellite
+        sat = self.create_satellite(tle['line1'], tle['line2'], satellite_name)
+        
+        # Current time
+        t = self.ts.now()
+        
+        # Calculate position
+        geocentric = sat.at(t)
+        subpoint = wgs84.subpoint(geocentric)
+        velocity = geocentric.velocity.km_per_s
+        speed = np.sqrt(velocity[0]**2 + velocity[1]**2 + velocity[2]**2)
+        
         return {
-            "type": "Feature",
-            "properties": {"segment": segment_name},
-            "geometry": {
-                "type": "LineString",
-                "coordinates": coords,
-            },
+            'time': t.utc_datetime().isoformat() + 'Z',
+            'lat': float(subpoint.latitude.degrees),
+            'lng': float(subpoint.longitude.degrees),
+            'alt': float(subpoint.elevation.km),
+            'velocity': float(speed)
         }
 
-    features = []
-    for name, coords in [
-        ("past", coords_past),
-        ("current_visible", coords_current),
-        ("future", coords_future),
-    ]:
-        f = make_feature(coords, name)
-        if f:
-            features.append(f)
-
-    return {
-        "type": "FeatureCollection",
-        "features": features,
-    }
+orbit_calc = OrbitCalculator()

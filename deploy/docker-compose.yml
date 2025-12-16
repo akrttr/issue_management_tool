@@ -1,36 +1,42 @@
 services:
-  satpass-db:
-      image: postgres:16-alpine
-      container_name: satpass-db
-      environment:
-        POSTGRES_DB: satpass
-        POSTGRES_USER: satpass_user
-        POSTGRES_PASSWORD: satpass_password
-      volumes:
-        - satpass_db_data:/var/lib/postgresql/data
-        - ../satellite_pass/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-
-      ports:
-      - "5435:5432"   # host:container
-     
-  satpass-api:
-    build:
-      context: ../satellite_pass
-      dockerfile: Dockerfile
-    container_name: satpass-api
+  postgres:
+    image: postgres:16-alpine
+    container_name: sattrack-db
     environment:
-      FLASK_ENV: production
-      SATPASS_DB_HOST: satpass-db
-      SATPASS_DB_PORT: 5432
-      SATPASS_DB_NAME: satpass
-      SATPASS_DB_USER: satpass_user
-      SATPASS_DB_PASSWORD: satpass_password
-      JWT_SECRET: "JQMsFWoyn4xd3UdAlNt2QFBbSbRyu6qiSAIyXnZZ/NOlqYa1uJ3Q1ZbY3b/4veos"
-    depends_on:
-      - satpass-db
+      POSTGRES_DB: sattrack
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - "8085:8000"   # host:container
-   
+      - "5435:5432"
+    volumes:
+      - tle_data:/var/lib/postgresql/data
+      - ../satellite_pass/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  sattrack-api:
+    build: ../satellite_pass
+    container_name: sattrack-api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: sattrack
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      FLASK_ENV: production
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - skyfield_data:/app/skyfield-data
+    restart: unless-stopped
+
   db:
     image: postgres:16-alpine
     container_name: satellite_tickets_db 
@@ -79,4 +85,5 @@ services:
 volumes:
   redis-data:
   postgres_data:
-  satpass_db_data:
+  skyfield_data:
+  tle_data:
