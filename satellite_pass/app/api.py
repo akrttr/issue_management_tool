@@ -1,5 +1,7 @@
 from datetime import datetime, date as date_cls
 from flask import Flask, request, jsonify
+from flask_cors import CORS  
+
 
 from .db import get_latest_tle
 from .db import upsert_satellite_and_insert_tle
@@ -7,6 +9,21 @@ from .db import upsert_satellite_and_insert_tle
 from .orbit import compute_passes_and_track, build_geojson_segments
 
 app = Flask(__name__)
+
+
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:8080",
+            "http://localhost:8080",
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
 
 def parse_date(date_str: str) -> date_cls:
     return datetime.strptime(date_str, "%Y-%m-%d").date()

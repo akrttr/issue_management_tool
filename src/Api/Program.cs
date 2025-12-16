@@ -154,7 +154,7 @@ builder.Services.AddCors(options =>
         // Fallback to localhost if nothing configured
         if (allowedOrigins == null || allowedOrigins.Length == 0)
         {
-            allowedOrigins = new[] { "http://localhost:3000", "http://localhost:5173" };
+            allowedOrigins = new[] { "http://localhost:3000", "http://localhost:5173",  "http://localhost:8080", "http://localhost:8085"  };
             Console.WriteLine("WARNING: No CORS origins configured, using localhost defaults");
         }
 

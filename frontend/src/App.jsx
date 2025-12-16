@@ -11,6 +11,8 @@ import ProgressRequestsTable from "./components/ProgressRequestsTable.jsx";
 import PauseManagement from "./components/PauseManagement.jsx";
 import ProgressRequestManagement from "./components/ProgressRequestManagement.jsx";
 import ActivityCalendar from "./components/ActivityCalendar.jsx";
+import SatelliteTracker from './components/SatelliteTracker';
+
 
 
 import { ToastContainer, Slide } from "react-toastify";
@@ -258,6 +260,12 @@ function App() {
                     transition={Slide}
 
                 />
+
+                {currentPage === "satellite-tracker" && (
+                    <SatelliteTracker />
+
+                )}
+
             </main>
         </div>
     );
