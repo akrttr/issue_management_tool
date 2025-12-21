@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 
-import { LayoutDashboard, List, LogOut, User, Bell, Clock, PauseOctagonIcon, CogIcon, BadgeInfo, Calendar } from "lucide-react";
+import { LayoutDashboard, List, LogOut, User, Bell, Clock, PauseOctagonIcon, CogIcon, BadgeInfo, Calendar, Satellite } from "lucide-react";
 import NotificationsPanel from './NotificationsPanel';
 import { notificationsAPI } from '../../services/api';
 import signalRService from '../../services/signalrService';
@@ -73,9 +73,15 @@ export default function Navigation({ currentPage, onNavigate }) {
                         <LayoutDashboard size={18} /> Gösterge Paneli
                     </button>
 
-                    {/* <button onClick={() => onNavigate('satellite-tracker')} style={{ ...styles.menuItem, ...(currentPage === 'tracker' ? styles.activeMenuItem : {}) }} >
-                        <LayoutDashboard size={18} /> Uydu Gozlem
-                    </button> */}
+                    <button
+                        onClick={() => onNavigate('gkt1-tracker')}
+                        style={{
+                            ...styles.menuItem,
+                            ...(currentPage === 'gkt1-tracker' ? styles.activeMenuItem : {})
+                        }}
+                    >
+                        <Satellite size={18} /> GKT1 Takip
+                    </button>
 
                     <button onClick={() => onNavigate('tickets')} style={{ ...styles.menuItem, ...(currentPage === 'tickets' ? styles.activeMenuItem : {}) }} >
                         <List size={18} />  Sorunlar

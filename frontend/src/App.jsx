@@ -13,6 +13,7 @@ import ProgressRequestManagement from "./components/ProgressRequestManagement.js
 import ActivityCalendar from "./components/ActivityCalendar.jsx";
 import SatelliteTracker from './components/SatelliteTracker';
 
+import Gkt1PassTracker from "./components/Gkt1PassTracker.jsx";
 
 
 import { ToastContainer, Slide } from "react-toastify";
@@ -261,9 +262,9 @@ function App() {
 
                 />
 
-                {currentPage === "satellite-tracker" && (
-                    <SatelliteTracker />
 
+                {currentPage === "gkt1-tracker" && (
+                    <Gkt1PassTracker />
                 )}
 
             </main>

@@ -1,41 +1,31 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: sattrack-db
-    environment:
-      POSTGRES_DB: sattrack
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5435:5432"
-    volumes:
-      - tle_data:/var/lib/postgresql/data
-      - ../satellite_pass/db/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-
-  sattrack-api:
-    build: ../satellite_pass
-    container_name: sattrack-api
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: sattrack
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      FLASK_ENV: production
-    ports:
-      - "8085:8085"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - skyfield_data:/app/skyfield-data
+  gkt1-backend:
+    build:
+      context: ../satellite_pass
+      dockerfile: Dockerfile
+    container_name: gkt1-backend
     restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - TLE_SOURCE_URL=${TLE_SOURCE_URL:-https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle}
+      - NORAD_ID=${NORAD_ID:-41875}
+      - GS_LATITUDE=${GS_LATITUDE:-39.9334}
+      - GS_LONGITUDE=${GS_LONGITUDE:-32.8597}
+      - GS_ALTITUDE=${GS_ALTITUDE:-0.9}
+      - MIN_ELEVATION=${MIN_ELEVATION:-10}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/api/health', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
     image: postgres:16-alpine

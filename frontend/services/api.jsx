@@ -3,6 +3,29 @@ import { API_BASE_URL } from '../src/config';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
 
+
+
+const GKT1_API_BASE_URL = import.meta.env.VITE_GKT1_API_URL || 'http://localhost:5001';
+
+const gkt1Api = axios.create({
+    baseURL: GKT1_API_BASE_URL,
+    timeout: 10000,
+});
+
+export const gkt1API = {
+    // Get latest TLE data for GKT1
+    getTLE: () => gkt1Api.get('/api/gkt1/tle'),
+    
+    // Get today's pass predictions
+    getTodayPasses: () => gkt1Api.get('/api/gkt1/passes/today'),
+    
+    // Get track points for visualization (orbit ground track)
+    getTodayTrack: () => gkt1Api.get('/api/gkt1/track/today'),
+    
+    // Get current satellite position
+    getCurrentPosition: () => gkt1Api.get('/api/gkt1/position/current'),
+};
+
 const api = axios.create({
     baseURL: API_BASE_URL,
 });

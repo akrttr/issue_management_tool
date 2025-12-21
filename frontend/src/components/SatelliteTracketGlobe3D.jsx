@@ -2,13 +2,15 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
-export default function Globe3D({ satelliteData, viewType = 'north', containerRef }) {
+export default function SatelliteTracketGlobe3D({ satelliteData, viewType = 'north', containerRef }) {
     const sceneRef = useRef(null);
     const rendererRef = useRef(null);
     const cameraRef = useRef(null);
     const controlsRef = useRef(null);
     const globeRef = useRef(null);
+    const animationIdRef = useRef(null);
 
+    // Initialize Three.js scene
     useEffect(() => {
         if (!containerRef.current) return;
 
@@ -18,14 +20,11 @@ export default function Globe3D({ satelliteData, viewType = 'north', containerRe
         sceneRef.current = scene;
 
         // Camera setup
-        const camera = new THREE.PerspectiveCamera(
-            45,
-            containerRef.current.clientWidth / containerRef.current.clientHeight,
-            0.1,
-            1000
-        );
+        const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+        const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
         camera.position.z = viewType === 'north' ? 3 : -3;
         camera.position.y = viewType === 'north' ? 2 : -2;
+        camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
         // Renderer setup
@@ -39,44 +38,60 @@ export default function Globe3D({ satelliteData, viewType = 'north', containerRe
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.enableZoom = true;
+        controls.minDistance = 1.5;
+        controls.maxDistance = 10;
         controlsRef.current = controls;
 
         // Lights
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
 
-        const pointLight = new THREE.PointLight(0xffffff, 0.8);
-        pointLight.position.set(5, 5, 5);
+        const pointLight = new THREE.PointLight(0xffffff, 1, 0);
+        pointLight.position.set(5, 3, 5);
         scene.add(pointLight);
 
         // Create Earth globe
         const globeGeometry = new THREE.SphereGeometry(1, 64, 64);
-        
-        // Load Earth texture
         const textureLoader = new THREE.TextureLoader();
-        const earthTexture = textureLoader.load(
-            'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'
-        );
         
-        const globeMaterial = new THREE.MeshPhongMaterial({
-            map: earthTexture,
-            bumpScale: 0.05,
-            specular: new THREE.Color('grey'),
-            shininess: 5
-        });
-
-        const globe = new THREE.Mesh(globeGeometry, globeMaterial);
-        scene.add(globe);
-        globeRef.current = globe;
+        textureLoader.load(
+            'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
+            (texture) => {
+                const globeMaterial = new THREE.MeshPhongMaterial({
+                    map: texture,
+                    bumpScale: 0.05,
+                    specular: new THREE.Color(0x333333),
+                    shininess: 15,
+                });
+                const globe = new THREE.Mesh(globeGeometry, globeMaterial);
+                globe.name = 'earth';
+                scene.add(globe);
+                globeRef.current = globe;
+            },
+            undefined,
+            (error) => {
+                console.error('Error loading Earth texture:', error);
+                // Fallback to solid color
+                const globeMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x2233ff,
+                    specular: new THREE.Color(0x333333),
+                    shininess: 15,
+                });
+                const globe = new THREE.Mesh(globeGeometry, globeMaterial);
+                globe.name = 'earth';
+                scene.add(globe);
+                globeRef.current = globe;
+            }
+        );
 
         // Animation loop
         const animate = () => {
-            requestAnimationFrame(animate);
+            animationIdRef.current = requestAnimationFrame(animate);
             
             // Rotate globe slowly
-            if (globeRef.current) {
-                globeRef.current.rotation.y += 0.001;
+            const earth = scene.getObjectByName('earth');
+            if (earth) {
+                earth.rotation.y += 0.001;
             }
             
             controls.update();
@@ -88,19 +103,38 @@ export default function Globe3D({ satelliteData, viewType = 'north', containerRe
         const handleResize = () => {
             if (!containerRef.current) return;
             
-            camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+            const width = containerRef.current.clientWidth;
+            const height = containerRef.current.clientHeight;
+            
+            camera.aspect = width / height;
             camera.updateProjectionMatrix();
-            renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+            renderer.setSize(width, height);
         };
         window.addEventListener('resize', handleResize);
 
         // Cleanup
         return () => {
             window.removeEventListener('resize', handleResize);
-            if (containerRef.current && rendererRef.current) {
-                containerRef.current.removeChild(rendererRef.current.domElement);
+            
+            if (animationIdRef.current) {
+                cancelAnimationFrame(animationIdRef.current);
             }
-            renderer.dispose();
+            
+            if (controlsRef.current) {
+                controlsRef.current.dispose();
+            }
+            
+            if (rendererRef.current) {
+                rendererRef.current.dispose();
+            }
+            
+            if (containerRef.current && rendererRef.current && rendererRef.current.domElement) {
+                try {
+                    containerRef.current.removeChild(rendererRef.current.domElement);
+                } catch (e) {
+                    // Element might already be removed
+                }
+            }
         };
     }, [containerRef, viewType]);
 
@@ -108,21 +142,44 @@ export default function Globe3D({ satelliteData, viewType = 'north', containerRe
     useEffect(() => {
         if (!satelliteData || !sceneRef.current) return;
 
-        renderTrajectoryOnGlobe(satelliteData);
+        renderTrajectoryOnGlobe();
     }, [satelliteData]);
 
-    const renderTrajectoryOnGlobe = (data) => {
-        // Remove existing trajectory lines
-        sceneRef.current.children
-            .filter(child => child.userData.isTrajectory)
-            .forEach(child => sceneRef.current.remove(child));
+    const renderTrajectoryOnGlobe = () => {
+        const scene = sceneRef.current;
+        if (!scene) return;
 
-        const features = data.geojson.features;
+        // Remove existing trajectory objects
+        const objectsToRemove = [];
+        scene.traverse((object) => {
+            if (object.userData.isTrajectory) {
+                objectsToRemove.push(object);
+            }
+        });
+        objectsToRemove.forEach(obj => {
+            scene.remove(obj);
+            if (obj.geometry) obj.geometry.dispose();
+            if (obj.material) {
+                if (Array.isArray(obj.material)) {
+                    obj.material.forEach(mat => mat.dispose());
+                } else {
+                    obj.material.dispose();
+                }
+            }
+        });
+
+        const features = satelliteData?.geojson?.features;
+        if (!features || features.length === 0) return;
+
+        let currentPosition = null;
 
         features.forEach((feature) => {
-            const coords = feature.geometry.coordinates;
-            const segment = feature.properties.segment;
+            if (feature.geometry.type !== 'LineString') return;
 
+            const coords = feature.geometry.coordinates;
+            const segment = feature.properties?.segment;
+
+            // Determine color
             let color;
             switch(segment) {
                 case 'past':
@@ -134,34 +191,44 @@ export default function Globe3D({ satelliteData, viewType = 'north', containerRe
                 case 'future':
                     color = 0x0088ff;
                     break;
+                default:
+                    color = 0xffffff;
             }
 
-            // Convert lat/lng to 3D coordinates
+            // Convert coordinates to 3D points
             const points = coords.map(coord => {
                 const [lng, lat] = coord;
                 return latLngToVector3(lat, lng, 1.01); // Slightly above surface
             });
 
-            // Create line
+            if (points.length < 2) return;
+
+            // Create line geometry
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const material = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+            const material = new THREE.LineBasicMaterial({ color, linewidth: 2 });
             const line = new THREE.Line(geometry, material);
             line.userData.isTrajectory = true;
-            sceneRef.current.add(line);
+            scene.add(line);
 
-            // Add satellite marker for current position
+            // Mark current position
             if (segment === 'current_visible' && points.length > 0) {
-                const satelliteGeometry = new THREE.SphereGeometry(0.02, 16, 16);
-                const satelliteMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-                const satellite = new THREE.Mesh(satelliteGeometry, satelliteMaterial);
-                satellite.position.copy(points[0]);
-                satellite.userData.isTrajectory = true;
-                sceneRef.current.add(satellite);
-
-                // Add communication cone
-                addCommunicationCone(points[0]);
+                currentPosition = points[0];
             }
         });
+
+        // Add satellite marker and communication cone
+        if (currentPosition) {
+            // Satellite marker
+            const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+            const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+            marker.position.copy(currentPosition);
+            marker.userData.isTrajectory = true;
+            scene.add(marker);
+
+            // Communication cone
+            addCommunicationCone(currentPosition);
+        }
     };
 
     const latLngToVector3 = (lat, lng, radius) => {
@@ -176,7 +243,10 @@ export default function Globe3D({ satelliteData, viewType = 'north', containerRe
     };
 
     const addCommunicationCone = (position) => {
-        // Create a cone mesh to represent the communication footprint
+        const scene = sceneRef.current;
+        if (!scene) return;
+
+        // Create cone mesh
         const coneGeometry = new THREE.ConeGeometry(0.5, 0.8, 32);
         const coneMaterial = new THREE.MeshBasicMaterial({
             color: 0x00ff00,
@@ -186,23 +256,27 @@ export default function Globe3D({ satelliteData, viewType = 'north', containerRe
         });
         const cone = new THREE.Mesh(coneGeometry, coneMaterial);
         
-        // Position and orient cone
+        // Position and orient cone toward Earth center
         cone.position.copy(position);
         cone.lookAt(0, 0, 0);
-        cone.rotateX(Math.PI);
+        cone.rotateX(Math.PI / 2);
         cone.userData.isTrajectory = true;
-        
-        sceneRef.current.add(cone);
+        scene.add(cone);
 
-        // Add cone wireframe
-        const wireframe = new THREE.WireframeGeometry(coneGeometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 1 });
-        const line = new THREE.LineSegments(wireframe, lineMaterial);
-        line.position.copy(position);
-        line.lookAt(0, 0, 0);
-        line.rotateX(Math.PI);
-        line.userData.isTrajectory = true;
-        sceneRef.current.add(line);
+        // Add wireframe for better visibility
+        const wireframeGeometry = new THREE.ConeGeometry(0.5, 0.8, 32);
+        const wireframeMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.6
+        });
+        const wireframeCone = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+        wireframeCone.position.copy(position);
+        wireframeCone.lookAt(0, 0, 0);
+        wireframeCone.rotateX(Math.PI / 2);
+        wireframeCone.userData.isTrajectory = true;
+        scene.add(wireframeCone);
     };
 
     return null; // Rendering is handled via refs

@@ -510,3 +510,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+venv/
+venv/*
+
