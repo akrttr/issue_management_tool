@@ -1,13 +1,15 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 import logging
 import os
-from datetime import datetime
-from threading import Lock
+from datetime import datetime, timezone
+from dataclasses import asdict
 
-from tle_updater import TLECache
-from pass_calculator import PassCalculator
+from services.tle_fetcher import TLEFetcher
+from services.pass_predictor import PassPredictor
+from models.satellite import TLEData
 
 # Configure logging
 logging.basicConfig(
@@ -16,135 +18,210 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuration from environment
-TLE_SOURCE_URL = os.getenv('TLE_SOURCE_URL', 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle')
-NORAD_ID = int(os.getenv('NORAD_ID', '25544'))  # Default to ISS for testing
-GS_LAT = float(os.getenv('GS_LATITUDE', '39.9334'))  # Ankara
-GS_LON = float(os.getenv('GS_LONGITUDE', '32.8597'))
-GS_ALT = float(os.getenv('GS_ALTITUDE', '0.9'))  # km
-MIN_ELEVATION = float(os.getenv('MIN_ELEVATION', '10'))
-
-# Initialize Flask
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Initialize components
-tle_cache = TLECache(TLE_SOURCE_URL, NORAD_ID)
-pass_calc = PassCalculator(GS_LAT, GS_LON, GS_ALT)
+# Configuration from environment variables
+TLE_URL = os.getenv('TLE_URL', 'https://celestrak.org/NORAD/elements/gp.php?CATNR=41875&FORMAT=TLE')
+NORAD_ID = os.getenv('NORAD_ID', '41875')
+UPDATE_HOUR = int(os.getenv('TLE_UPDATE_HOUR', '3'))  # Default 03:00 UTC
 
-# Pass/track cache with lock
-cache_lock = Lock()
-passes_cache = {'data': None, 'updated_at': None}
-track_cache = {'data': None, 'updated_at': None}
+# Initialize services
+tle_fetcher = TLEFetcher(TLE_URL, NORAD_ID)
+pass_predictor = PassPredictor()
 
-def update_all_data():
-    """Background job to update TLE and recompute passes/track"""
-    logger.info("Running scheduled update...")
-    
-    # Fetch fresh TLE
-    tle = tle_cache.get_tle(force_refresh=True)
-    if not tle:
-        logger.error("Failed to fetch TLE, skipping pass/track update")
-        return
-    
-    # Recompute passes and track
-    passes = pass_calc.compute_passes_today(tle, MIN_ELEVATION)
-    track = pass_calc.compute_track_today(tle, interval_seconds=60)
-    
-    with cache_lock:
-        passes_cache['data'] = passes
-        passes_cache['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+# Cache for today's passes
+cached_passes = []
+passes_cache_time = None
+
+def update_tle_data():
+    """Scheduled job to update TLE data daily"""
+    try:
+        logger.info("Running scheduled TLE update...")
+        tle_fetcher.fetch_tle(force_refresh=True)
+        logger.info("TLE update completed successfully")
         
-        track_cache['data'] = track
-        track_cache['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        # Invalidate pass cache
+        global passes_cache_time
+        passes_cache_time = None
+        
+    except Exception as e:
+        logger.error(f"Error in scheduled TLE update: {e}")
+
+def update_pass_cache():
+    """Update cached pass predictions"""
+    global cached_passes, passes_cache_time
     
-    logger.info("Scheduled update completed successfully")
+    try:
+        tle = tle_fetcher.fetch_tle()
+        cached_passes = pass_predictor.predict_passes_today(tle)
+        passes_cache_time = datetime.now(timezone.utc)
+        logger.info(f"Updated pass cache with {len(cached_passes)} passes")
+    except Exception as e:
+        logger.error(f"Error updating pass cache: {e}")
 
 # Initialize scheduler
 scheduler = BackgroundScheduler()
-scheduler.add_job(update_all_data, 'interval', hours=6, id='update_data')
-scheduler.add_job(update_all_data, 'cron', hour=0, minute=5, id='daily_update')  # Daily at 00:05 UTC
+scheduler.add_job(
+    func=update_tle_data,
+    trigger=CronTrigger(hour=UPDATE_HOUR, minute=0),
+    id='tle_update',
+    name='Daily TLE update',
+    replace_existing=True
+)
 scheduler.start()
 
-# Run initial update on startup
-update_all_data()
+# Initial data fetch on startup
+logger.info("Performing initial data fetch...")
+try:
+    tle_fetcher.fetch_tle()
+    update_pass_cache()
+    logger.info("Initial data fetch completed")
+except Exception as e:
+    logger.error(f"Error in initial data fetch: {e}")
 
-# ==================== API Endpoints ====================
+# ===== API ENDPOINTS =====
 
-@app.route('/api/health', methods=['GET'])
-def health():
-    """Health check endpoint"""
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Docker"""
     return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat() + 'Z',
-        'tle_last_update': tle_cache.last_update.isoformat() + 'Z' if tle_cache.last_update else None,
-    })
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'tle_cached': tle_fetcher.cached_tle is not None,
+        'passes_cached': len(cached_passes) > 0
+    }), 200
 
-@app.route('/api/gkt1/tle', methods=['GET'])
+@app.route('/api/satellite/tle', methods=['GET'])
 def get_tle():
     """Get latest TLE data"""
-    tle = tle_cache.get_tle()
-    if not tle:
-        return jsonify({'error': 'TLE data not available'}), 503
-    
-    return jsonify(tle)
+    try:
+        tle = tle_fetcher.fetch_tle()
+        return jsonify({
+            'satellite_name': tle.satellite_name,
+            'norad_id': tle.norad_id,
+            'epoch': tle.epoch.isoformat(),
+            'line1': tle.line1,
+            'line2': tle.line2
+        }), 200
+    except Exception as e:
+        logger.error(f"Error in /api/satellite/tle: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/gkt1/passes/today', methods=['GET'])
-def get_passes_today():
-    """Get today's pass predictions"""
-    with cache_lock:
-        if not passes_cache['data']:
-            return jsonify({'error': 'Pass data not available yet'}), 503
+@app.route('/api/satellite/passes/today', methods=['GET'])
+def get_today_passes():
+    """Get all passes for current UTC day"""
+    try:
+        # Check if cache is still valid (valid for current UTC day)
+        now = datetime.now(timezone.utc)
+        cache_valid = False
+        
+        if passes_cache_time:
+            # Cache valid if from same UTC day
+            if (passes_cache_time.year == now.year and
+                passes_cache_time.month == now.month and
+                passes_cache_time.day == now.day):
+                cache_valid = True
+        
+        # Update cache if invalid
+        if not cache_valid:
+            logger.info("Pass cache invalid or expired, updating...")
+            update_pass_cache()
+        
+        # Convert to dict for JSON serialization
+        passes_data = []
+        for p in cached_passes:
+            passes_data.append({
+                'aos_time': p.aos_time.isoformat(),
+                'los_time': p.los_time.isoformat(),
+                'tca_time': p.tca_time.isoformat(),
+                'max_elevation': p.max_elevation,
+                'duration': p.duration,
+                'aos_azimuth': p.aos_azimuth,
+                'los_azimuth': p.los_azimuth,
+                'max_azimuth': p.max_azimuth
+            })
         
         return jsonify({
-            'passes': passes_cache['data'],
-            'updated_at': passes_cache['updated_at'],
-            'ground_station': {
-                'latitude': GS_LAT,
-                'longitude': GS_LON,
-                'altitude_km': GS_ALT,
+            'passes': passes_data,
+            'count': len(passes_data),
+            'date': now.date().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in /api/satellite/passes/today: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/satellite/track/current', methods=['GET'])
+def get_current_track():
+    """Get current satellite position and ground track"""
+    try:
+        minutes = int(request.args.get('minutes', 90))
+        tle = tle_fetcher.fetch_tle()
+        track_data = pass_predictor.get_current_track(tle, minutes_past=minutes, minutes_future=minutes)
+        
+        # Convert to dict
+        result = {
+            'current_position': {
+                'latitude': track_data.current_position.latitude,
+                'longitude': track_data.current_position.longitude,
+                'altitude': track_data.current_position.altitude,
+                'timestamp': track_data.current_position.timestamp.isoformat()
             },
-            'min_elevation': MIN_ELEVATION,
-        })
+            'past_track': [
+                {
+                    'latitude': p.latitude,
+                    'longitude': p.longitude,
+                    'altitude': p.altitude,
+                    'timestamp': p.timestamp.isoformat()
+                } for p in track_data.past_track
+            ],
+            'future_track': [
+                {
+                    'latitude': p.latitude,
+                    'longitude': p.longitude,
+                    'altitude': p.altitude,
+                    'timestamp': p.timestamp.isoformat()
+                } for p in track_data.future_track
+            ],
+            'orbit_track': [
+                {
+                    'latitude': p.latitude,
+                    'longitude': p.longitude,
+                    'altitude': p.altitude,
+                    'timestamp': p.timestamp.isoformat()
+                } for p in track_data.orbit_track
+            ]
+        }
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Error in /api/satellite/track/current: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/gkt1/track/today', methods=['GET'])
-def get_track_today():
-    """Get today's ground track points"""
-    with cache_lock:
-        if not track_cache['data']:
-            return jsonify({'error': 'Track data not available yet'}), 503
+@app.route('/api/satellite/coverage', methods=['GET'])
+def get_coverage():
+    """Get ground station coverage footprint"""
+    try:
+        tle = tle_fetcher.fetch_tle()
+        coverage = pass_predictor.get_coverage_footprint(tle)
         
         return jsonify({
-            'points': track_cache['data'],
-            'updated_at': track_cache['updated_at'],
-        })
+            'center_lat': coverage.center_lat,
+            'center_lon': coverage.center_lon,
+            'min_elevation': coverage.min_elevation,
+            'footprint': coverage.footprint
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in /api/satellite/coverage: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/gkt1/position/current', methods=['GET'])
-def get_current_position():
-    """Get current satellite position"""
-    tle = tle_cache.get_tle()
-    if not tle:
-        return jsonify({'error': 'TLE data not available'}), 503
-    
-    position = pass_calc.get_current_position(tle)
-    if not position:
-        return jsonify({'error': 'Unable to compute position'}), 500
-    
-    return jsonify(position)
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    logger.error(f"Internal error: {error}")
-    return jsonify({'error': 'Internal server error'}), 500
+# Cleanup scheduler on shutdown
+import atexit
+atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == '__main__':
-    try:
-        port = int(os.getenv('PORT', '5001'))
-        app.run(host='0.0.0.0', port=port, debug=False)
-    except KeyboardInterrupt:
-        scheduler.shutdown()
-        logger.info("Application shutdown")
+    app.run(host='0.0.0.0', port=5000, debug=False)

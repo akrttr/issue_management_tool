@@ -11,9 +11,7 @@ import ProgressRequestsTable from "./components/ProgressRequestsTable.jsx";
 import PauseManagement from "./components/PauseManagement.jsx";
 import ProgressRequestManagement from "./components/ProgressRequestManagement.jsx";
 import ActivityCalendar from "./components/ActivityCalendar.jsx";
-import SatelliteTracker from './components/SatelliteTracker';
-
-import Gkt1PassTracker from "./components/Gkt1PassTracker.jsx";
+import SatelliteTracker from './components/SatelliteTracker/SatelliteTracker.jsx';
 
 
 import { ToastContainer, Slide } from "react-toastify";
@@ -264,7 +262,7 @@ function App() {
 
 
                 {currentPage === "gkt1-tracker" && (
-                    <Gkt1PassTracker />
+                    <SatelliteTracker />
                 )}
 
             </main>

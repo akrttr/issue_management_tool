@@ -12,19 +12,48 @@ const gkt1Api = axios.create({
     timeout: 10000,
 });
 
-export const gkt1API = {
-    // Get latest TLE data for GKT1
-    getTLE: () => gkt1Api.get('/api/gkt1/tle'),
-    
-    // Get today's pass predictions
-    getTodayPasses: () => gkt1Api.get('/api/gkt1/passes/today'),
-    
-    // Get track points for visualization (orbit ground track)
-    getTodayTrack: () => gkt1Api.get('/api/gkt1/track/today'),
-    
-    // Get current satellite position
-    getCurrentPosition: () => gkt1Api.get('/api/gkt1/position/current'),
+export const satelliteAPI = {
+  // Get latest TLE data
+  getTLE: async () => {
+    const response = await fetch(`${GKT1_API_BASE_URL}/api/satellite/tle`, {
+      method: 'GET',
+    });
+    if (!response.ok) throw new Error('Failed to fetch TLE data');
+    return response.json();
+  },
+
+  // Get today's passes for GKT1
+  getTodayPasses: async () => {
+    const response = await fetch(`${GKT1_API_BASE_URL}/api/satellite/passes/today`, {
+      method: 'GET',
+    });
+    if (!response.ok) throw new Error('Failed to fetch pass data');
+    return response.json();
+  },
+
+  // Get current tracking data (position, ground track)
+  getCurrentTrack: async (minutesAhead = 120) => {
+    const response = await fetch(
+      `${GKT1_API_BASE_URL}/api/satellite/track/current?minutes=${minutesAhead}`,
+      {
+        method: 'GET',
+      }
+    );
+    if (!response.ok) throw new Error('Failed to fetch track data');
+    return response.json();
+  },
+
+  // Get ground station coverage footprint
+  getGroundStationCoverage: async () => {
+    const response = await fetch(`${GKT1_API_BASE_URL}/api/satellite/coverage`, {
+      method: 'GET',
+    });
+    if (!response.ok) throw new Error('Failed to fetch coverage data');
+    return response.json();
+  }
 };
+
+
 
 const api = axios.create({
     baseURL: API_BASE_URL,
