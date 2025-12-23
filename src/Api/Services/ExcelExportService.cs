@@ -186,7 +186,7 @@ namespace Api.Services
                 worksheet.Cells[row, 25].Value = FormatUserName(ticket.ActivityControlPersonnel);
                 worksheet.Cells[row, 26].Value = FormatUserName(ticket.ActivityControlCommander);
                 worksheet.Cells[row, 27].Value = ticket.ActivityControlResult ?? "";
-                worksheet.Cells[row, 28].Value = GetUserPositionLabel(ticket.CreatedBy?.Position);
+                worksheet.Cells[row, 28].Value = GetUserPositionLabel(ticket.DetectedByUser?.Position);
                 worksheet.Cells[row, 29].Value = FormatUserName(ticket.CreatedBy);
                 worksheet.Cells[row, 30].Value = FormatDateTime(ticket.CreatedAt, dateFormat, timezone);
 

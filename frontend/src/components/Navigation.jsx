@@ -73,7 +73,7 @@ export default function Navigation({ currentPage, onNavigate }) {
                         <LayoutDashboard size={18} /> Gösterge Paneli
                     </button>
 
-                    <button
+                  {/*  <button
                         onClick={() => onNavigate('gkt1-tracker')}
                         style={{
                             ...styles.menuItem,
@@ -82,7 +82,7 @@ export default function Navigation({ currentPage, onNavigate }) {
                     >
                         <Satellite size={18} /> GKT1 Takip
                     </button>
-
+                    */}
                     <button onClick={() => onNavigate('tickets')} style={{ ...styles.menuItem, ...(currentPage === 'tickets' ? styles.activeMenuItem : {}) }} >
                         <List size={18} />  Sorunlar
                     </button>

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "MdghtwCBCfHqvVnHC7PfADbKeWypHmM2uYvumylYp4quS1qcpA9wJrP+M4YHDJbtwOA67uHvEwJMdjqIOP64Vg==",
+  "dgSpecHash": "zQ3irM03U2I=",
   "success": true,
-  "projectFilePath": "/home/knn/Desktop/issue_management_tool/src/Domain/Domain.csproj",
+  "projectFilePath": "C:\\Users\\knn\\Desktop\\issue_management_tool\\src\\Domain\\Domain.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }

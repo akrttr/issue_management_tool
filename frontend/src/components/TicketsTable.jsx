@@ -14,7 +14,7 @@ export default function TicketsTable({ onViewTicket, onEditTicket, onCreateTicke
     const [showDeleted, setShowDeleted] = useState(false);
 
     // Sorting
-    const [sortField, setSortField] = useState("createdAt");
+    const [sortField, setSortField] = useState("Id");
     const [sortOrder, setSortOrder] = useState("desc");
 
     // Selection (for bulk PDF)

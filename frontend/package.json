@@ -44,6 +44,6 @@
     "terser": "^5.44.0",
     "uglifyify": "^5.0.2",
     "vite": "^7.1.7",
-    "vite-plugin-cesium": "^1.2.22"
+    "vite-plugin-cesium": "^1.2.23"
   }
 }

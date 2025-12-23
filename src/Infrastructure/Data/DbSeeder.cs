@@ -326,7 +326,7 @@ namespace Infrastructure.Data
             {
     "Yazılım",
     "Donanım",
-    "Prosedür"
+    "Prosedür",
 };
 
             foreach (var name in componentNames)
