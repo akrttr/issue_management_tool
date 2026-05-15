@@ -413,8 +413,8 @@ export default function UserList({ onViewUser, onEditUser, onCreateUser, onManag
                 (user.department && user.department.toLowerCase().includes(search));
             if (!matchesSearch) return false;
         }
-        if (affiliationFilter && user.affiliation !== affiliationFilter) return false;
-        if (roleFilter && user.role !== roleFilter) return false;
+       if (affiliationFilter && user.affiliation !== affiliationFilter) return false; 
+       if (roleFilter && user.role !== roleFilter) return false;
 
         return true;
     });
@@ -552,8 +552,8 @@ export default function UserList({ onViewUser, onEditUser, onCreateUser, onManag
                                 >
                                     <option value="">Kurumlar</option>
                                     <option value="Airforce">Hava Kuvvetleri</option>
-                                    <option value="Internal">TUSAS</option>
-                                    <option value="External">Yüklenici</option>
+                                    <option value="Contractor">TUSAS</option>
+                                    <option value="Subcontractor">Yüklenici</option>
                                 </select>
 
                                 <label style={styles.checkboxLabel}>

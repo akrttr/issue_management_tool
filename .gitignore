@@ -515,3 +515,4 @@ dist-ssr
 venv/
 venv/*
 
+Web.assets.cache

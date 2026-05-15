@@ -35,7 +35,7 @@ namespace Api.Services
         private string FormatDateTime(DateTime? dateTime, string format, string timezoneId)
         {
             if (!dateTime.HasValue)
-                return "-";
+                return "";
 
             try
             {
