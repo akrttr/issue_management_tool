@@ -516,3 +516,6 @@ venv/
 venv/*
 
 Web.assets.cache
+
+# Visual Studio LightSwitch / IntelliSense cache
+*.lscache
