@@ -453,6 +453,320 @@ Bul:
 3. Tarihi elle ileri bir tarihe yazıp deneyin → "Durdurma tarihi ileri bir tarih olamaz" hatası gelmeli.
 4. Tarihi değiştirmeden durdurun → eskisi gibi şu anki saatle durmalı.
 
+---
+
+### D-004 — Devam (durdurma bitiş) tarihini seçebilme
+- **Tarih:** 2026-09-24
+- **Neden:** D-003 ile durdurma başlangıcı geçmişe girilebiliyordu ama bitişi hep
+  "şu an" kaydediliyordu. Artık durdurma bitirilirken **Devam tarihi** seçilebiliyor
+  (varsayılan: şu an). Geçmiş bir tarih seçilirse durdurmanın bitişi o tarih olur.
+  İki yerde geçerli:
+  - Sorun detayında, DURDURULDU durumundaki sorunun durumu değiştirilirken
+    (sebep penceresi gibi bir pencerede sadece tarih sorulur),
+  - **Durdurma Yönetimi** sayfasındaki "Devam Ettir" penceresinde (yeni "Devam Tarihi" alanı).
+
+  Kurallar: ileri tarih olamaz; durdurmanın başlangıç tarihinden önce olamaz.
+  Sorun geçmişindeki kaydın notuna `(Devam tarihi: 22.09.2026 09:00)` eklenir.
+  Durdurma Yönetimi'nde hata olursa artık backend'in hata mesajı gösterilir.
+- **Bölüm:** backend + frontend
+- **Ön koşul:** D-003 uygulanmış olmalı.
+- **Commit:** `D-004:` ile başlayan commit
+- [ ] Kapalı ağda uygulandı
+
+#### Backend
+
+**1) `src/Api/DTOs/TicketDTOs.cs`** (yaklaşık 47. satır — D-003'te değişen satır)
+
+Bul:
+```csharp
+public record ChangeStatusRequest(string ToStatus, string? Notes, string? PauseReason, DateTime? PausedAt = null);
+```
+
+Şununla değiştir:
+```csharp
+public record ChangeStatusRequest(string ToStatus, string? Notes, string? PauseReason, DateTime? PausedAt = null, DateTime? ResumedAt = null);
+```
+
+**2) `src/Api/DTOs/TicketPauseDTOs.cs`** (yaklaşık 38. satır, `ResumeTicketPauseRequest`)
+
+Bul:
+```csharp
+        long PauseId,
+        string? ResumeNotes
+    );
+```
+
+Şununla değiştir (`ResumeNotes`'tan sonra virgül ve yeni satır):
+```csharp
+        long PauseId,
+        string? ResumeNotes,
+        DateTime? ResumedAt = null
+    );
+```
+
+**3) `src/Api/Controllers/TicketsController.cs`** (yaklaşık 836. satır, `ChangeStatus` içi)
+
+Bul:
+```csharp
+        // Handle resuming - close active pause
+        if (oldStatus == TicketStatus.PAUSED && toStatus != TicketStatus.PAUSED)
+```
+
+Şununla değiştir (araya bir satır eklendi):
+```csharp
+        // Handle resuming - close active pause
+        var resumedAt = request.ResumedAt?.ToUniversalTime() ?? DateTime.UtcNow;
+        if (oldStatus == TicketStatus.PAUSED && toStatus != TicketStatus.PAUSED)
+```
+
+**4) `src/Api/Controllers/TicketsController.cs`** (3. adımın birkaç satır altı)
+
+Bul (dosyada tek geçer):
+```csharp
+                activePause.ResumedAt = DateTime.UtcNow;
+```
+
+Şununla değiştir:
+```csharp
+                // Geçmişe yönelik devam: ileri tarih olamaz, durdurma tarihinden önce olamaz
+                if (resumedAt > DateTime.UtcNow.AddMinutes(1))
+                    return BadRequest(new { message = "Devam tarihi ileri bir tarih olamaz" });
+                if (resumedAt < activePause.PausedAt)
+                    return BadRequest(new { message = "Devam tarihi durdurma tarihinden önce olamaz" });
+
+                activePause.ResumedAt = resumedAt;
+```
+
+**5) `src/Api/Controllers/TicketsController.cs`** (aynı metotta `new TicketAction` içi — D-003'te değişen yer)
+
+Bul:
+```csharp
+                    ? $"Sebep: {request.PauseReason} (Durdurma tarihi: {pausedAt.ToLocalTime():dd.MM.yyyy HH:mm})"
+                    : request.Notes,
+```
+
+Şununla değiştir (ortaya iki satır eklendi):
+```csharp
+                    ? $"Sebep: {request.PauseReason} (Durdurma tarihi: {pausedAt.ToLocalTime():dd.MM.yyyy HH:mm})"
+                : oldStatus == TicketStatus.PAUSED
+                    ? $"{request.Notes} (Devam tarihi: {resumedAt.ToLocalTime():dd.MM.yyyy HH:mm})"
+                    : request.Notes,
+```
+
+**6) `src/Api/Controllers/TicketPausesController.cs`** (yaklaşık 249. satır, `ResumePause` metodu)
+
+Bul (dosyada tek geçer):
+```csharp
+            pause.ResumedAt = DateTime.UtcNow;
+```
+
+Şununla değiştir:
+```csharp
+            // Geçmişe yönelik devam: ileri tarih olamaz, durdurma tarihinden önce olamaz
+            var resumedAt = request.ResumedAt?.ToUniversalTime() ?? DateTime.UtcNow;
+            if (resumedAt > DateTime.UtcNow.AddMinutes(1))
+                return BadRequest(new { message = "Devam tarihi ileri bir tarih olamaz" });
+            if (resumedAt < pause.PausedAt)
+                return BadRequest(new { message = "Devam tarihi durdurma tarihinden önce olamaz" });
+
+            pause.ResumedAt = resumedAt;
+```
+
+**7) `src/Api/Controllers/TicketPausesController.cs`** (aynı metotta, yaklaşık 272. satır)
+
+Bul:
+```csharp
+                Notes = request.ResumeNotes ?? "Duraklama sonlandırıldı",
+```
+
+Şununla değiştir:
+```csharp
+                Notes = $"{request.ResumeNotes ?? "Duraklama sonlandırıldı"} (Devam tarihi: {resumedAt.ToLocalTime():dd.MM.yyyy HH:mm})",
+```
+
+#### Frontend
+
+**8) `frontend/src/components/ConfirmToast.jsx`** (yaklaşık 59. satır)
+
+Bul:
+```jsx
+export function showInputToast(message) {
+```
+
+Şununla değiştir:
+```jsx
+export function showInputToast(message, dateLabel = "Durdurma tarihi:", withText = true) {
+```
+
+**9) `frontend/src/components/ConfirmToast.jsx`** (yaklaşık 71. satır, sebep kutusunun başı)
+
+Bul:
+```jsx
+                    <input
+                        type="text"
+```
+
+Şununla değiştir (`<input`'un önüne `{withText && ` eklendi):
+```jsx
+                    {withText && <input
+                        type="text"
+```
+
+**10) `frontend/src/components/ConfirmToast.jsx`** (aynı kutunun sonu, yaklaşık 82. satır)
+
+Bul:
+```jsx
+                        onChange={(e) => (userInput = e.target.value)}
+                    />
+```
+
+Şununla değiştir (`/>`'nin sonuna `}` eklendi):
+```jsx
+                        onChange={(e) => (userInput = e.target.value)}
+                    />}
+```
+
+**11) `frontend/src/components/ConfirmToast.jsx`** (yaklaşık 84. satır — D-003'te eklenen etiket)
+
+Bul:
+```jsx
+                    <div style={{ marginBottom: "4px" }}>Durdurma tarihi:</div>
+```
+
+Şununla değiştir:
+```jsx
+                    <div style={{ marginBottom: "4px" }}>{dateLabel}</div>
+```
+
+**12) `frontend/src/components/TicketDetail.jsx`** (yaklaşık 414. satır, `handleStatusChange` içi)
+
+Bul:
+```jsx
+        const confirm = await showConfirmToast(`Durumu "${statusLabel}" olarak değiştirmek istediğinize emin misiniz?`);
+```
+
+Bu satırın **hemen üstüne** şunu ekleyin (bulduğunuz satır aynen kalıyor):
+```jsx
+        // Durdurulmuş sorun devam ettiriliyorsa devam (durdurma bitiş) tarihini sor
+        let resumedAt = null;
+        if (formData.status === 'PAUSED' && newStatus !== 'PAUSED') {
+            const resumeInput = await showInputToast("Durdurmanın bittiği tarihi seçiniz:", "Devam tarihi:", false);
+            if (!resumeInput) { toast.info("İşlem iptal edildi."); return; }
+            resumedAt = resumeInput.date ? new Date(resumeInput.date).toISOString() : null;
+        }
+
+```
+
+**13) `frontend/src/components/TicketDetail.jsx`** (`statusData` nesnesi — D-003'te değişen yer)
+
+Bul:
+```jsx
+                PausedAt: pausedAt
+            }
+```
+
+Şununla değiştir (`pausedAt`'tan sonra virgül):
+```jsx
+                PausedAt: pausedAt,
+                ResumedAt: resumedAt
+            }
+```
+
+**14) `frontend/src/components/PauseManagement.jsx`** (yaklaşık 16. satır, en üstteki `useState`'ler)
+
+Bul:
+```jsx
+    const [resumeNotes, setResumeNotes] = useState('');
+```
+
+Şununla değiştir:
+```jsx
+    const [resumeNotes, setResumeNotes] = useState('');
+    const [resumeDate, setResumeDate] = useState('');
+```
+
+**15) `frontend/src/components/PauseManagement.jsx`** (yaklaşık 219. satır, `handleResume` içi)
+
+Bul:
+```jsx
+            await ticketPausesAPI.resume(selectedPause.id, { resumeNotes });
+```
+
+Şununla değiştir:
+```jsx
+            await ticketPausesAPI.resume(selectedPause.id, {
+                resumeNotes,
+                resumedAt: resumeDate ? new Date(resumeDate).toISOString() : null
+            });
+```
+
+**16) `frontend/src/components/PauseManagement.jsx`** (aynı fonksiyonun `catch` bloğu)
+
+Bul:
+```jsx
+            toast.error('Duraklama sonlandırılırken hata oluştu');
+```
+
+Şununla değiştir:
+```jsx
+            toast.error(error.response?.data?.message || 'Duraklama sonlandırılırken hata oluştu');
+```
+
+**17) `frontend/src/components/PauseManagement.jsx`** (yaklaşık 535. satır, "Devam Ettir" butonunun `onClick`'i)
+
+Bul (dosyada tek geçer):
+```jsx
+                                                                                        setShowResumeModal(true);
+```
+
+Şununla değiştir (üstüne iki satır eklendi):
+```jsx
+                                                                                        // Varsayılan devam tarihi: şu an (yerel saat)
+                                                                                        setResumeDate(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+                                                                                        setShowResumeModal(true);
+```
+
+**18) `frontend/src/components/PauseManagement.jsx`** (yaklaşık 595. satır, "Devam Ettir" penceresi)
+
+Bul:
+```jsx
+                                placeholder="Duraklamanın neden sonlandırıldığını açıklayın..."
+                            />
+                        </div>
+```
+
+Şununla değiştir (altına yeni bir alan eklendi):
+```jsx
+                                placeholder="Duraklamanın neden sonlandırıldığını açıklayın..."
+                            />
+                        </div>
+
+                        <div style={styles.modalField}>
+                            <label style={styles.label}>Devam Tarihi</label>
+                            <input
+                                type="datetime-local"
+                                value={resumeDate}
+                                onChange={(e) => setResumeDate(e.target.value)}
+                                style={styles.textarea}
+                            />
+                        </div>
+```
+
+**Sonra:**
+- Backend'i yeniden başlatın (`Ctrl+C`, `src/Api` klasöründe `dotnet run`).
+- Frontend dosyalarını kaydedin. Veritabanı değişikliği (migration) **yok**.
+
+**Kontrol:**
+1. Durdurulmuş bir sorunun detayında durumu (ör. AÇIK) değiştirin → önce sadece tarih
+   soran bir pencere çıkmalı ("Devam tarihi", şu anki saatle dolu).
+2. Tarihi geçmişe (ama durdurma başlangıcından sonraya) alıp onaylayın → sorunun
+   **Durdurma geçmişi**nde bitiş o tarih olmalı; süre buna göre hesaplanmalı.
+3. Tarihi durdurma başlangıcından önceye alın → "Devam tarihi durdurma tarihinden önce
+   olamaz" hatası gelmeli, sorun DURDURULDU kalmalı.
+4. **Durdurma Yönetimi** sayfasında aktif bir durdurmada "Devam Ettir" → pencerede
+   "Devam Tarihi" alanı olmalı; geçmiş bir tarihle devam ettirin → bitiş o tarih olmalı.
+5. Durdurma sebebi penceresi (D-003) eskisi gibi hem sebep hem tarih sormalı.
+
 <!--
 Madde şablonu:
 

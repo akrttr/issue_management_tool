@@ -37,7 +37,8 @@ namespace Api.DTOs
 
     public record ResumeTicketPauseRequest(
         long PauseId,
-        string? ResumeNotes
+        string? ResumeNotes,
+        DateTime? ResumedAt = null
     );
 
     public record UpdateTicketPauseRequest(

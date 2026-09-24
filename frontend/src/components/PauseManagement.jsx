@@ -14,6 +14,7 @@ export default function PauseManagement({ onViewTicket, onNavigate }) {
     const [showResumeModal, setShowResumeModal] = useState(false);
     const [selectedPause, setSelectedPause] = useState(null);
     const [resumeNotes, setResumeNotes] = useState('');
+    const [resumeDate, setResumeDate] = useState('');
 
     useEffect(() => {
         loadPauses();
@@ -216,7 +217,10 @@ export default function PauseManagement({ onViewTicket, onNavigate }) {
         if (!selectedPause) return;
 
         try {
-            await ticketPausesAPI.resume(selectedPause.id, { resumeNotes });
+            await ticketPausesAPI.resume(selectedPause.id, {
+                resumeNotes,
+                resumedAt: resumeDate ? new Date(resumeDate).toISOString() : null
+            });
             toast.success('Duraklama sonlandırıldı');
             setShowResumeModal(false);
             setResumeNotes('');
@@ -224,7 +228,7 @@ export default function PauseManagement({ onViewTicket, onNavigate }) {
             loadPauses();
         } catch (error) {
             console.error('Error resuming pause:', error);
-            toast.error('Duraklama sonlandırılırken hata oluştu');
+            toast.error(error.response?.data?.message || 'Duraklama sonlandırılırken hata oluştu');
         }
     };
 
@@ -532,6 +536,8 @@ export default function PauseManagement({ onViewTicket, onNavigate }) {
                                                                                 <button
                                                                                     onClick={() => {
                                                                                         setSelectedPause(pause);
+                                                                                        // Varsayılan devam tarihi: şu an (yerel saat)
+                                                                                        setResumeDate(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
                                                                                         setShowResumeModal(true);
                                                                                     }}
                                                                                     style={styles.resumeButton}
@@ -593,6 +599,16 @@ export default function PauseManagement({ onViewTicket, onNavigate }) {
                                 style={styles.textarea}
                                 rows={4}
                                 placeholder="Duraklamanın neden sonlandırıldığını açıklayın..."
+                            />
+                        </div>
+
+                        <div style={styles.modalField}>
+                            <label style={styles.label}>Devam Tarihi</label>
+                            <input
+                                type="datetime-local"
+                                value={resumeDate}
+                                onChange={(e) => setResumeDate(e.target.value)}
+                                style={styles.textarea}
                             />
                         </div>
 

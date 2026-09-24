@@ -834,6 +834,7 @@ public class TicketsController : ControllerBase
         }
 
         // Handle resuming - close active pause
+        var resumedAt = request.ResumedAt?.ToUniversalTime() ?? DateTime.UtcNow;
         if (oldStatus == TicketStatus.PAUSED && toStatus != TicketStatus.PAUSED)
         {
             var activePause = await _context
@@ -843,7 +844,13 @@ public class TicketsController : ControllerBase
 
             if (activePause != null)
             {
-                activePause.ResumedAt = DateTime.UtcNow;
+                // Geçmişe yönelik devam: ileri tarih olamaz, durdurma tarihinden önce olamaz
+                if (resumedAt > DateTime.UtcNow.AddMinutes(1))
+                    return BadRequest(new { message = "Devam tarihi ileri bir tarih olamaz" });
+                if (resumedAt < activePause.PausedAt)
+                    return BadRequest(new { message = "Devam tarihi durdurma tarihinden önce olamaz" });
+
+                activePause.ResumedAt = resumedAt;
                 activePause.ResumedByUserId = userId;
             }
         }
@@ -864,6 +871,8 @@ public class TicketsController : ControllerBase
             Notes =
                 toStatus == TicketStatus.PAUSED
                     ? $"Sebep: {request.PauseReason} (Durdurma tarihi: {pausedAt.ToLocalTime():dd.MM.yyyy HH:mm})"
+                : oldStatus == TicketStatus.PAUSED
+                    ? $"{request.Notes} (Devam tarihi: {resumedAt.ToLocalTime():dd.MM.yyyy HH:mm})"
                     : request.Notes,
             PerformedById = userId,
             PerformedAt = DateTime.UtcNow,

@@ -245,8 +245,15 @@ namespace Api.Controllers
 
             var userId = GetCurrentUserId();
 
+            // Geçmişe yönelik devam: ileri tarih olamaz, durdurma tarihinden önce olamaz
+            var resumedAt = request.ResumedAt?.ToUniversalTime() ?? DateTime.UtcNow;
+            if (resumedAt > DateTime.UtcNow.AddMinutes(1))
+                return BadRequest(new { message = "Devam tarihi ileri bir tarih olamaz" });
+            if (resumedAt < pause.PausedAt)
+                return BadRequest(new { message = "Devam tarihi durdurma tarihinden önce olamaz" });
+
             // Update pause record
-            pause.ResumedAt = DateTime.UtcNow;
+            pause.ResumedAt = resumedAt;
             pause.ResumedByUserId = userId;
             pause.ResumeNotes = request.ResumeNotes;
 
@@ -262,7 +269,7 @@ namespace Api.Controllers
                 ActionType = ActionType.StatusChange,
                 FromStatus = TicketStatus.PAUSED,
                 ToStatus = TicketStatus.OPEN,
-                Notes = request.ResumeNotes ?? "Duraklama sonlandırıldı",
+                Notes = $"{request.ResumeNotes ?? "Duraklama sonlandırıldı"} (Devam tarihi: {resumedAt.ToLocalTime():dd.MM.yyyy HH:mm})",
                 PerformedById = userId,
                 PerformedAt = DateTime.UtcNow,
             };

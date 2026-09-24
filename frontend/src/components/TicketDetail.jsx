@@ -411,6 +411,15 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
 
 
         }
+
+        // Durdurulmuş sorun devam ettiriliyorsa devam (durdurma bitiş) tarihini sor
+        let resumedAt = null;
+        if (formData.status === 'PAUSED' && newStatus !== 'PAUSED') {
+            const resumeInput = await showInputToast("Durdurmanın bittiği tarihi seçiniz:", "Devam tarihi:", false);
+            if (!resumeInput) { toast.info("İşlem iptal edildi."); return; }
+            resumedAt = resumeInput.date ? new Date(resumeInput.date).toISOString() : null;
+        }
+
         const confirm = await showConfirmToast(`Durumu "${statusLabel}" olarak değiştirmek istediğinize emin misiniz?`);
         if (!confirm) { toast.info("İşlem iptal edildi."); return; }
 
@@ -430,7 +439,8 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
                 toStatus: newStatus || '',
                 Notes: `Detay sayfasindan durum  ${newStatus} olarak guncellendi`,
                 PauseReason: pauseReason || null,
-                PausedAt: pausedAt
+                PausedAt: pausedAt,
+                ResumedAt: resumedAt
             }
 
 

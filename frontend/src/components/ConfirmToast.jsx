@@ -56,7 +56,7 @@ export function showConfirmToast(message) {
     });
 }
 
-export function showInputToast(message) {
+export function showInputToast(message, dateLabel = "Durdurma tarihi:", withText = true) {
     return new Promise((resolve) => {
         let userInput = "";
         // Varsayılan durdurma tarihi: şu an (yerel saat, datetime-local formatında)
@@ -68,7 +68,7 @@ export function showInputToast(message) {
                 <div style={{ textAlign: "center" }}>
                     <div style={{ marginBottom: "10px" }}>{message}</div>
 
-                    <input
+                    {withText && <input
                         type="text"
                         placeholder="Duraklama sebebi..."
                         style={{
@@ -79,9 +79,9 @@ export function showInputToast(message) {
                             border: "1px solid #ccc",
                         }}
                         onChange={(e) => (userInput = e.target.value)}
-                    />
+                    />}
 
-                    <div style={{ marginBottom: "4px" }}>Durdurma tarihi:</div>
+                    <div style={{ marginBottom: "4px" }}>{dateLabel}</div>
                     <input
                         type="datetime-local"
                         defaultValue={nowLocal}
