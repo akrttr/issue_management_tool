@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Select from 'react-select';
 import PersonnelSelect from "./PersonnelSelect";
-import { ticketsAPI, userApi, configurationAPI, notificationsAPI, ticketPausesAPI } from "../../services/api";
+import { ticketsAPI, userApi, configurationAPI, notificationsAPI } from "../../services/api";
 import { generateTicketPDF } from "../utils/pdfGenerator";
 import { showConfirmToast, showInputToast } from './ConfirmToast.jsx';
 import { toast } from "react-toastify";
@@ -405,7 +405,6 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
                 return;
             }
             setPauseReason(pauseReason);
-            await ticketPausesAPI.create({ ticketId: ticketId, pauseReason: pauseReason });
 
 
         }

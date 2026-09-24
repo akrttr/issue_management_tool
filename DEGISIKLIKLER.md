@@ -212,6 +212,50 @@ değilse `frontend` klasöründe `npm run dev` ile başlatın. Backend'e dokunul
 4. Yeni sekmede sorunu kapatın/geri butonuna basın → sorun listesine gitmeli.
 5. Eski sekmede normal tık → soruna aynı sekmede girip geri dönebilmeli (eski davranış).
 
+---
+
+### D-002 — Durdurmada log'a çift kayıt düşmesi
+- **Tarih:** 2026-09-24
+- **Neden:** Sorun durdurulunca geçmişe iki kayıt düşüyordu
+  ("Duraklama Sebebi: …" ve "Sebep: …", ikisi de DURDURULDU → DURDURULDU).
+  Frontend durdurma için backend'e iki ayrı istek gönderiyordu. Ayrıca ilk istek
+  onaydan **önce** gittiği için "Emin misiniz?" sorusuna "Hayır" denince bile sorun
+  durduruluyordu. Artık tek istek gidiyor: log'a tek kayıt (AÇIK → DURDURULDU) düşüyor,
+  "Hayır" denince hiçbir şey değişmiyor.
+- **Bölüm:** frontend
+- **Commit:** `D-002:` ile başlayan commit
+- [ ] Kapalı ağda uygulandı
+
+**1) `frontend/src/components/TicketDetail.jsx`** (yaklaşık 408. satır, `handleStatusChange` içi)
+
+Bul ve **sil** (sadece bu satır):
+```jsx
+            await ticketPausesAPI.create({ ticketId: ticketId, pauseReason: pauseReason });
+```
+
+**2) `frontend/src/components/TicketDetail.jsx`** (4. satır, en üstteki import)
+
+Bul:
+```jsx
+import { ticketsAPI, userApi, configurationAPI, notificationsAPI, ticketPausesAPI } from "../../services/api";
+```
+
+Şununla değiştir (sondaki `, ticketPausesAPI` kaldırıldı):
+```jsx
+import { ticketsAPI, userApi, configurationAPI, notificationsAPI } from "../../services/api";
+```
+
+**Sonra:** Dosyayı kaydedin (`npm run dev` açıksa sayfa kendiliğinden yenilenir). Backend'e dokunulmadı.
+
+**Kontrol:**
+1. Açık bir sorunu durdurun, sebep girin, onayda "Evet" deyin → sorun geçmişinde
+   **tek** kayıt olmalı: "AÇIK → DURDURULDU", not "Sebep: …".
+2. Başka açık bir sorunda durdur → sebep gir → onayda "Hayır" deyin → sorun
+   durumu değişmemeli, geçmişe kayıt düşmemeli.
+
+> Not: Daha önce oluşmuş çift kayıtlar veritabanında kalır; bu değişiklik sadece
+> yeni durdurmaları etkiler.
+
 <!--
 Madde şablonu:
 
