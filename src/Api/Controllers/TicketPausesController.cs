@@ -258,7 +258,7 @@ namespace Api.Controllers
             pause.ResumeNotes = request.ResumeNotes;
 
             // Update ticket status back to OPEN
-            pause.Ticket.Status = TicketStatus.REOPENED;
+            pause.Ticket.Status = TicketStatus.OPEN;
             pause.Ticket.UpdatedAt = DateTime.UtcNow;
             pause.Ticket.LastUpdatedById = userId;
 

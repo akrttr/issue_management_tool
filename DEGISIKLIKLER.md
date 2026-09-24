@@ -884,6 +884,35 @@ Frontend ve veritabanı değişikliği **yok**.
    **Durdurma geçmişi**ndeki (sorun detayı) başlangıç/bitiş tarihleriyle aynı olmalı.
 3. Geçmiş tarihle durdurulmuş/devam ettirilmiş bir sorunda Excel'de seçilen tarihler görünmeli.
 
+---
+
+### D-006 — Durdurma Yönetimi'nden devam ettirilen sorun AÇIK olsun
+- **Tarih:** 2026-09-24
+- **Neden:** Durdurma Yönetimi sayfasındaki "Devam Ettir" ile devam ettirilen sorun
+  **TEKRAR AÇILDI** durumuna geçiyordu, ama sorun geçmişine "DURDURULDU → AÇIK"
+  yazılıyordu (tutarsız). Karar: devam ettirilen sorun **AÇIK** olacak.
+  (Sorun detayından devam ettirmede durum zaten kullanıcının seçtiği durum olur; değişmedi.)
+- **Bölüm:** backend
+- **Commit:** `D-006:` ile başlayan commit
+- [ ] Kapalı ağda uygulandı
+
+**1) `src/Api/Controllers/TicketPausesController.cs`** (yaklaşık 261. satır, `ResumePause` metodu)
+
+Bul (dosyada tek geçer):
+```csharp
+            pause.Ticket.Status = TicketStatus.REOPENED;
+```
+
+Şununla değiştir:
+```csharp
+            pause.Ticket.Status = TicketStatus.OPEN;
+```
+
+**Sonra:** Backend'i yeniden başlatın (`Ctrl+C`, `src/Api` klasöründe `dotnet run`).
+
+**Kontrol:** Durdurma Yönetimi'nde aktif bir durdurmayı "Devam Ettir" ile sonlandırın →
+sorunun durumu **AÇIK** olmalı; sorun geçmişinde "DURDURULDU → AÇIK" kaydı olmalı.
+
 <!--
 Madde şablonu:
 
