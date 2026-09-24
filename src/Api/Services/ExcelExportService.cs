@@ -268,47 +268,11 @@ namespace Api.Services
 
         private List<PauseInterval> GetPauseIntervals(Ticket ticket)
         {
-            var result = new List<PauseInterval>();
-
-            // Only StatusChange actions are relevant for status transitions
-            var statusChanges = ticket.Actions
-                .Where(a => a.ActionType == ActionType.StatusChange)
-                .OrderBy(a => a.PerformedAt)
+            // Durdurma kayıtlarından (ticket_pause) oku: seçilen geçmiş tarihler ve silinen durdurmalar doğru yansır
+            return ticket.Pauses
+                .OrderBy(p => p.PausedAt)
+                .Select(p => new PauseInterval(p.PausedAt, p.ResumedAt))
                 .ToList();
-
-            if (!statusChanges.Any())
-                return result;
-
-            for (int i = 0; i < statusChanges.Count; i++)
-            {
-                var current = statusChanges[i];
-
-                // We only care about transitions TO PAUSED
-                if (current.ToStatus == TicketStatus.PAUSED)
-                {
-                    var start = current.PerformedAt;
-
-                    // Find next transition that LEAVES PAUSED
-                    var next = statusChanges
-                        .Skip(i + 1)
-                        .FirstOrDefault(a => a.FromStatus == TicketStatus.PAUSED);
-
-                    // If we never leave PAUSED, we ignore this incomplete interval
-                    if (next != null)
-                    {
-                        result.Add(new PauseInterval(start, next.PerformedAt));
-
-                        // Jump index to the exit action so we don't reuse it
-                        i = statusChanges.IndexOf(next);
-                    }
-                    else
-                    {
-                        result.Add(new PauseInterval(start, null));
-                    }
-                }
-            }
-
-            return result;
         }
 
         private string FormatUserName(User? user)

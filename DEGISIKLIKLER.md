@@ -767,6 +767,123 @@ Bul:
    "Devam Tarihi" alanı olmalı; geçmiş bir tarihle devam ettirin → bitiş o tarih olmalı.
 5. Durdurma sebebi penceresi (D-003) eskisi gibi hem sebep hem tarih sormalı.
 
+---
+
+### D-005 — Excel'de durdurma tarihlerinin doğru aktarılması
+- **Tarih:** 2026-09-24
+- **Neden:** Excel'deki "Duraklatma N Başlangıç / Bitiş" sütunları gerçek durdurma
+  kayıtlarından değil, sorun geçmişindeki durum değişikliği kayıtlarının **işlem
+  saatinden** hesaplanıyordu. Sonuçları:
+  - D-003/D-004 ile seçilen geçmiş tarihler Excel'e yansımıyordu (işlem saati çıkıyordu).
+  - Eski çift kayıt hatası (D-002 öncesi) yüzünden bazı sorunlarda Excel, gerçek
+    durdurma yerine **birkaç saniyelik** sahte bir durdurma gösteriyordu
+    (geliştirme veritabanında #24: gerçek 13.01–28.01.2026, Excel'de 13.01 16:22–16:22).
+  - Silinen durdurmalar Excel'de görünmeye devam ediyordu.
+
+  Artık Excel, Durdurmalar sayfası ve sorun detayıyla **aynı kaynaktan** (durdurma
+  kayıtları) okuyor.
+- **Bilinen etki:** Durdurma kayıt tablosu kullanılmaya başlamadan önce (geliştirme
+  veritabanında Ocak 2026 öncesi) yapılmış ve tabloda kaydı olmayan eski durdurmalar
+  artık Excel'de **görünmez** (geliştirme veritabanında #11 ve #37). Bu durdurmalar
+  Durdurmalar sayfasında ve sorun detayında zaten görünmüyordu. Tabloya aktarılmaları
+  istenmedi.
+- **Bölüm:** backend
+- **Commit:** `D-005:` ile başlayan commit
+- [ ] Kapalı ağda uygulandı
+
+**1) `src/Api/Controllers/TicketsController.cs`** (yaklaşık 1109. satır, `ExportToExcel` metodu)
+
+> Dikkat: `.Include(t => t.Actions)` dosyada **iki kez** geçer (biri ~295. satırda,
+> ona dokunmayın). Değişecek olan, hemen altında `ActivityControlCommander` satırı olan,
+> `ExportToExcel` içindekidir.
+
+Bul:
+```csharp
+                .Include(t => t.Actions)
+                .Include(t => t.ActivityControlCommander)
+```
+
+Şununla değiştir (sadece ilk satır değişti: `Actions` → `Pauses`):
+```csharp
+                .Include(t => t.Pauses)
+                .Include(t => t.ActivityControlCommander)
+```
+
+**2) `src/Api/Services/ExcelExportService.cs`** (yaklaşık 269. satır, `GetPauseIntervals` fonksiyonu)
+
+Fonksiyonun **gövdesinin tamamını** değiştirin: `private List<PauseInterval> GetPauseIntervals(Ticket ticket)`
+satırının altındaki `{` ile fonksiyonun kapanış `}`'si arasındaki her şeyi (yaklaşık 40 satır;
+`var result = new List<PauseInterval>();` ile başlar, `return result;` ile biter) silin.
+
+Sonuç şöyle olmalı:
+```csharp
+        private List<PauseInterval> GetPauseIntervals(Ticket ticket)
+        {
+            // Durdurma kayıtlarından (ticket_pause) oku: seçilen geçmiş tarihler ve silinen durdurmalar doğru yansır
+            return ticket.Pauses
+                .OrderBy(p => p.PausedAt)
+                .Select(p => new PauseInterval(p.PausedAt, p.ResumedAt))
+                .ToList();
+        }
+```
+
+<details>
+<summary>Silinecek eski gövde (karşılaştırma için)</summary>
+
+```csharp
+            var result = new List<PauseInterval>();
+
+            // Only StatusChange actions are relevant for status transitions
+            var statusChanges = ticket.Actions
+                .Where(a => a.ActionType == ActionType.StatusChange)
+                .OrderBy(a => a.PerformedAt)
+                .ToList();
+
+            if (!statusChanges.Any())
+                return result;
+
+            for (int i = 0; i < statusChanges.Count; i++)
+            {
+                var current = statusChanges[i];
+
+                // We only care about transitions TO PAUSED
+                if (current.ToStatus == TicketStatus.PAUSED)
+                {
+                    var start = current.PerformedAt;
+
+                    // Find next transition that LEAVES PAUSED
+                    var next = statusChanges
+                        .Skip(i + 1)
+                        .FirstOrDefault(a => a.FromStatus == TicketStatus.PAUSED);
+
+                    // If we never leave PAUSED, we ignore this incomplete interval
+                    if (next != null)
+                    {
+                        result.Add(new PauseInterval(start, next.PerformedAt));
+
+                        // Jump index to the exit action so we don't reuse it
+                        i = statusChanges.IndexOf(next);
+                    }
+                    else
+                    {
+                        result.Add(new PauseInterval(start, null));
+                    }
+                }
+            }
+
+            return result;
+```
+</details>
+
+**Sonra:** Backend'i yeniden başlatın (`Ctrl+C`, `src/Api` klasöründe `dotnet run`).
+Frontend ve veritabanı değişikliği **yok**.
+
+**Kontrol:**
+1. Sorunlar sayfasından Excel'e aktarın.
+2. Durdurulmuş bir sorunun "Duraklatma 1 Başlangıç / Bitiş" değerleri, o sorunun
+   **Durdurma geçmişi**ndeki (sorun detayı) başlangıç/bitiş tarihleriyle aynı olmalı.
+3. Geçmiş tarihle durdurulmuş/devam ettirilmiş bir sorunda Excel'de seçilen tarihler görünmeli.
+
 <!--
 Madde şablonu:
 
