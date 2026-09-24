@@ -59,6 +59,9 @@ export function showConfirmToast(message) {
 export function showInputToast(message) {
     return new Promise((resolve) => {
         let userInput = "";
+        // Varsayılan durdurma tarihi: şu an (yerel saat, datetime-local formatında)
+        const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        let dateInput = nowLocal;
 
         const toastId = toast.info(
             ({ closeToast }) => (
@@ -78,6 +81,21 @@ export function showInputToast(message) {
                         onChange={(e) => (userInput = e.target.value)}
                     />
 
+                    <div style={{ marginBottom: "4px" }}>Durdurma tarihi:</div>
+                    <input
+                        type="datetime-local"
+                        defaultValue={nowLocal}
+                        max={nowLocal}
+                        style={{
+                            width: "90%",
+                            padding: "8px",
+                            marginBottom: "10px",
+                            borderRadius: "6px",
+                            border: "1px solid #ccc",
+                        }}
+                        onChange={(e) => (dateInput = e.target.value)}
+                    />
+
                     <button
                         style={{
                             marginRight: "10px",
@@ -89,7 +107,7 @@ export function showInputToast(message) {
                             cursor: "pointer"
                         }}
                         onClick={() => {
-                            resolve(userInput || ""); 
+                            resolve({ text: userInput || "", date: dateInput });
                             toast.dismiss(toastId);
                         }}
                     >

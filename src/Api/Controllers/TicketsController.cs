@@ -805,17 +805,28 @@ public class TicketsController : ControllerBase
         var userId = GetCurrentUserId();
 
         // Handle pausing - create pause record
+        var pausedAt = request.PausedAt?.ToUniversalTime() ?? DateTime.UtcNow;
         if (toStatus == TicketStatus.PAUSED && oldStatus != TicketStatus.PAUSED)
         {
             if (string.IsNullOrWhiteSpace(request.PauseReason))
                 return BadRequest(new { message = "Duraklama sebebi zorunludur" });
+
+            // Geçmişe yönelik durdurma: ileri tarih olamaz, önceki durdurmanın bitişinden önce olamaz
+            if (pausedAt > DateTime.UtcNow.AddMinutes(1))
+                return BadRequest(new { message = "Durdurma tarihi ileri bir tarih olamaz" });
+
+            var lastResumedAt = await _context
+                .TicketPauses.Where(tp => tp.TicketId == id && tp.ResumedAt != null)
+                .MaxAsync(tp => tp.ResumedAt);
+            if (lastResumedAt.HasValue && pausedAt < lastResumedAt.Value)
+                return BadRequest(new { message = "Durdurma tarihi önceki durdurmanın bitişinden önce olamaz" });
 
             var pause = new TicketPause
             {
                 TicketId = id,
                 PausedByUserId = userId,
                 PauseReason = request.PauseReason,
-                PausedAt = DateTime.UtcNow,
+                PausedAt = pausedAt,
                 CreatedAt = DateTime.UtcNow,
             };
 
@@ -851,7 +862,9 @@ public class TicketsController : ControllerBase
             FromStatus = oldStatus,
             ToStatus = toStatus,
             Notes =
-                toStatus == TicketStatus.PAUSED ? $"Sebep: {request.PauseReason}" : request.Notes,
+                toStatus == TicketStatus.PAUSED
+                    ? $"Sebep: {request.PauseReason} (Durdurma tarihi: {pausedAt.ToLocalTime():dd.MM.yyyy HH:mm})"
+                    : request.Notes,
             PerformedById = userId,
             PerformedAt = DateTime.UtcNow,
         };

@@ -256,6 +256,203 @@ import { ticketsAPI, userApi, configurationAPI, notificationsAPI } from "../../s
 > Not: Daha önce oluşmuş çift kayıtlar veritabanında kalır; bu değişiklik sadece
 > yeni durdurmaları etkiler.
 
+---
+
+### D-003 — Durdurma tarihini seçebilme (geçmişe yönelik durdurma)
+- **Tarih:** 2026-09-24
+- **Neden:** Durdurma tarihi her zaman "şu an" olarak kaydediliyordu ve sonradan
+  değiştirilemiyordu. Artık durdururken sebep penceresinde bir **Durdurma tarihi**
+  alanı var (varsayılan: şu an). Geçmiş bir tarih seçilebilir.
+  - İleri (gelecek) tarih kabul edilmez.
+  - Sorunun önceki bir durdurması varsa, yeni tarih o durdurmanın bitişinden önce olamaz
+    (süreler üst üste binmesin diye).
+  - Sorun geçmişindeki kayıt, işlemin yapıldığı anın saatiyle görünür; notunda gerçek
+    durdurma tarihi yazar: `Sebep: … (Durdurma tarihi: 20.09.2026 14:00)`.
+- **Bölüm:** backend + frontend
+- **Ön koşul:** D-002 uygulanmış olmalı.
+- **Commit:** `D-003:` ile başlayan commit
+- [ ] Kapalı ağda uygulandı
+
+**1) `src/Api/DTOs/TicketDTOs.cs`** (yaklaşık 47. satır)
+
+Bul:
+```csharp
+public record ChangeStatusRequest(string ToStatus, string? Notes, string? PauseReason);
+```
+
+Şununla değiştir:
+```csharp
+public record ChangeStatusRequest(string ToStatus, string? Notes, string? PauseReason, DateTime? PausedAt = null);
+```
+
+**2) `src/Api/Controllers/TicketsController.cs`** (yaklaşık 807. satır, `ChangeStatus` metodu içi)
+
+Bul:
+```csharp
+        // Handle pausing - create pause record
+        if (toStatus == TicketStatus.PAUSED && oldStatus != TicketStatus.PAUSED)
+        {
+            if (string.IsNullOrWhiteSpace(request.PauseReason))
+                return BadRequest(new { message = "Duraklama sebebi zorunludur" });
+```
+
+Şununla değiştir:
+```csharp
+        // Handle pausing - create pause record
+        var pausedAt = request.PausedAt?.ToUniversalTime() ?? DateTime.UtcNow;
+        if (toStatus == TicketStatus.PAUSED && oldStatus != TicketStatus.PAUSED)
+        {
+            if (string.IsNullOrWhiteSpace(request.PauseReason))
+                return BadRequest(new { message = "Duraklama sebebi zorunludur" });
+
+            // Geçmişe yönelik durdurma: ileri tarih olamaz, önceki durdurmanın bitişinden önce olamaz
+            if (pausedAt > DateTime.UtcNow.AddMinutes(1))
+                return BadRequest(new { message = "Durdurma tarihi ileri bir tarih olamaz" });
+
+            var lastResumedAt = await _context
+                .TicketPauses.Where(tp => tp.TicketId == id && tp.ResumedAt != null)
+                .MaxAsync(tp => tp.ResumedAt);
+            if (lastResumedAt.HasValue && pausedAt < lastResumedAt.Value)
+                return BadRequest(new { message = "Durdurma tarihi önceki durdurmanın bitişinden önce olamaz" });
+```
+
+**3) `src/Api/Controllers/TicketsController.cs`** (2. adımın hemen altında, `new TicketPause` bloğu içi, yaklaşık 829. satır)
+
+Bul (dosyada tek geçer):
+```csharp
+                PausedAt = DateTime.UtcNow,
+```
+
+Şununla değiştir:
+```csharp
+                PausedAt = pausedAt,
+```
+
+**4) `src/Api/Controllers/TicketsController.cs`** (yaklaşık 865. satır, aynı metotta `new TicketAction` bloğu içi)
+
+Bul:
+```csharp
+                toStatus == TicketStatus.PAUSED ? $"Sebep: {request.PauseReason}" : request.Notes,
+```
+
+Şununla değiştir:
+```csharp
+                toStatus == TicketStatus.PAUSED
+                    ? $"Sebep: {request.PauseReason} (Durdurma tarihi: {pausedAt.ToLocalTime():dd.MM.yyyy HH:mm})"
+                    : request.Notes,
+```
+
+**5) `frontend/src/components/ConfirmToast.jsx`** (yaklaşık 59. satır, `showInputToast` başı)
+
+Bul:
+```jsx
+export function showInputToast(message) {
+    return new Promise((resolve) => {
+        let userInput = "";
+```
+
+Şununla değiştir:
+```jsx
+export function showInputToast(message) {
+    return new Promise((resolve) => {
+        let userInput = "";
+        // Varsayılan durdurma tarihi: şu an (yerel saat, datetime-local formatında)
+        const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        let dateInput = nowLocal;
+```
+
+**6) `frontend/src/components/ConfirmToast.jsx`** (yaklaşık 81. satır, sebep kutusunun altı)
+
+Bul:
+```jsx
+                        onChange={(e) => (userInput = e.target.value)}
+                    />
+```
+
+Şununla değiştir (ilk iki satır aynen kalıyor, altına tarih kutusu ekleniyor):
+```jsx
+                        onChange={(e) => (userInput = e.target.value)}
+                    />
+
+                    <div style={{ marginBottom: "4px" }}>Durdurma tarihi:</div>
+                    <input
+                        type="datetime-local"
+                        defaultValue={nowLocal}
+                        max={nowLocal}
+                        style={{
+                            width: "90%",
+                            padding: "8px",
+                            marginBottom: "10px",
+                            borderRadius: "6px",
+                            border: "1px solid #ccc",
+                        }}
+                        onChange={(e) => (dateInput = e.target.value)}
+                    />
+```
+
+**7) `frontend/src/components/ConfirmToast.jsx`** (yaklaşık 110. satır, "Kaydet" butonunun `onClick`'i)
+
+Bul:
+```jsx
+                            resolve(userInput || "");
+```
+
+Şununla değiştir:
+```jsx
+                            resolve({ text: userInput || "", date: dateInput });
+```
+
+**8) `frontend/src/components/TicketDetail.jsx`** (yaklaşık 395. satır, `handleStatusChange` içi)
+
+Bul:
+```jsx
+        let pauseReason = null;
+
+        if (newStatus === 'PAUSED') {
+            // pauseReason = prompt('Lütfen duraklama sebebini giriniz:');
+            pauseReason = await showInputToast("Lütfen duraklama sebebini giriniz:");
+```
+
+Şununla değiştir:
+```jsx
+        let pauseReason = null;
+        let pausedAt = null;
+
+        if (newStatus === 'PAUSED') {
+            // pauseReason = prompt('Lütfen duraklama sebebini giriniz:');
+            const pauseInput = await showInputToast("Lütfen duraklama sebebini giriniz:");
+            pauseReason = pauseInput?.text ?? null;
+            pausedAt = pauseInput?.date ? new Date(pauseInput.date).toISOString() : null;
+```
+
+**9) `frontend/src/components/TicketDetail.jsx`** (yaklaşık 430. satır, `statusData` nesnesi)
+
+Bul:
+```jsx
+                PauseReason: pauseReason || null
+            }
+```
+
+Şununla değiştir (ilk satırın sonuna virgül eklendi):
+```jsx
+                PauseReason: pauseReason || null,
+                PausedAt: pausedAt
+            }
+```
+
+**Sonra:**
+- Backend'i yeniden başlatın: çalışan `dotnet run`'ı `Ctrl+C` ile durdurup `src/Api` klasöründe tekrar `dotnet run`.
+- Frontend dosyalarını kaydedin (`npm run dev` açıksa kendiliğinden yenilenir).
+- Veritabanı değişikliği (migration) **yok**.
+
+**Kontrol:**
+1. Açık bir sorunu durdurun → sebep penceresinde "Durdurma tarihi" alanı, şu anki tarih/saatle dolu gelmeli.
+2. Tarihi birkaç gün geriye alın, sebep girin, onaylayın → sorunun **Durdurma geçmişi**nde
+   başlangıç olarak seçtiğiniz tarih görünmeli; sorun geçmişinde not
+   `Sebep: … (Durdurma tarihi: <seçilen tarih>)` olmalı.
+3. Tarihi elle ileri bir tarihe yazıp deneyin → "Durdurma tarihi ileri bir tarih olamaz" hatası gelmeli.
+4. Tarihi değiştirmeden durdurun → eskisi gibi şu anki saatle durmalı.
+
 <!--
 Madde şablonu:
 

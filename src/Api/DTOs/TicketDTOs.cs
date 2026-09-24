@@ -44,7 +44,7 @@ public record CreateTicketRequest(
 );
 
 // Change Status of the ticket
-public record ChangeStatusRequest(string ToStatus, string? Notes, string? PauseReason);
+public record ChangeStatusRequest(string ToStatus, string? Notes, string? PauseReason, DateTime? PausedAt = null);
 
 // Add comment and/or progress
 public record AddCommentRequest(string Body);

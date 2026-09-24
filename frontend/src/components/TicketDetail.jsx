@@ -393,10 +393,13 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
 
         const statusLabel = getStatusLabel(newStatus);
         let pauseReason = null;
+        let pausedAt = null;
 
         if (newStatus === 'PAUSED') {
             // pauseReason = prompt('Lütfen duraklama sebebini giriniz:');
-            pauseReason = await showInputToast("Lütfen duraklama sebebini giriniz:");
+            const pauseInput = await showInputToast("Lütfen duraklama sebebini giriniz:");
+            pauseReason = pauseInput?.text ?? null;
+            pausedAt = pauseInput?.date ? new Date(pauseInput.date).toISOString() : null;
 
 
 
@@ -426,7 +429,8 @@ export default function TicketDetail({ ticketId, onClose, onNavigate }) {
             const statusData = {
                 toStatus: newStatus || '',
                 Notes: `Detay sayfasindan durum  ${newStatus} olarak guncellendi`,
-                PauseReason: pauseReason || null
+                PauseReason: pauseReason || null,
+                PausedAt: pausedAt
             }
 
 
