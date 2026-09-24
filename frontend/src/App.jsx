@@ -34,23 +34,15 @@ function App() {
         if (token && refreshToken) {
             setIsAuthenticated(true);
 
-            const initialPage = "dashboard";
-            window.history.replaceState(
-                { page: initialPage, state: {} },
-                "",
-                `/${initialPage}`
-            );
-        }
-    }, []);
+            // Yeni sekmede açılan sorun linki: /ticket-detail?id=123
+            const urlTicketId = new URLSearchParams(window.location.search).get("id");
+            if (window.location.pathname === "/ticket-detail" && urlTicketId) {
+                const state = { ticketId: Number(urlTicketId) };
+                window.history.replaceState({ page: "ticket-detail", state, initial: true }, "");
+                applyNavigation("ticket-detail", state);
+                return;
+            }
 
-
-    useEffect(() => {
-        const token = localStorage.getItem("token");
-        const refreshToken = localStorage.getItem("refreshToken");
-        if (token && refreshToken) {
-            setIsAuthenticated(true);
-
-            // initial history entry = dashboard
             const initialPage = "dashboard";
             window.history.replaceState(
                 { page: initialPage, state: {} },
@@ -91,7 +83,10 @@ function App() {
 
     // Push to history + apply navigation
     const navigateWithHistory = (page, state = {}) => {
-        window.history.pushState({ page, state }, "", `/${page}`);
+        const url = page === "ticket-detail" && state.ticketId && state.ticketId !== "new"
+            ? `/ticket-detail?id=${state.ticketId}`
+            : `/${page}`;
+        window.history.pushState({ page, state }, "", url);
         applyNavigation(page, state);
     };
 
@@ -133,6 +128,11 @@ function App() {
     const handleCloseTicketDetail = () => {
         // refresh data, then go back to previous history entry
         setRefreshTickets((prev) => prev + 1);
+        // Yeni sekmede açıldıysa geri dönülecek sayfa yok: sorun listesine git
+        if (window.history.state?.initial) {
+            navigateWithHistory("tickets");
+            return;
+        }
         window.history.back();   // popstate listener will call applyNavigation
     };
 

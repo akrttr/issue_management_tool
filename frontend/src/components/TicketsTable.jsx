@@ -573,7 +573,18 @@ export default function TicketsTable({ onViewTicket, onEditTicket, onCreateTicke
                                         if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a')) {
                                             return;
                                         }
+                                        // Ctrl+tık: yeni sekmede aç
+                                        if (e.ctrlKey || e.metaKey) {
+                                            window.open(`/ticket-detail?id=${ticket.id}`, '_blank');
+                                            return;
+                                        }
                                         onViewTicket(ticket.id);
+                                    }}
+                                    onAuxClick={(e) => {
+                                        // Orta tuş (tekerlek) tık: yeni sekmede aç
+                                        if (e.button === 1 && !e.target.closest('a')) {
+                                            window.open(`/ticket-detail?id=${ticket.id}`, '_blank');
+                                        }
                                     }}
                                 >
                                     <td style={styles.td}>
@@ -587,7 +598,19 @@ export default function TicketsTable({ onViewTicket, onEditTicket, onCreateTicke
                                     </td>
                                     <td style={styles.td}>#{ticket.id}</td>
                                     <td style={styles.td}>
-                                        <span style={styles.ticketCode}>{ticket.externalCode}</span>
+                                        <a
+                                            href={`/ticket-detail?id=${ticket.id}`}
+                                            style={{ ...styles.ticketCode, textDecoration: 'none' }}
+                                            onClick={(e) => {
+                                                // Normal tık aynı sekmede; Ctrl/orta tık/sağ tık tarayıcıya bırakılır
+                                                if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    onViewTicket(ticket.id);
+                                                }
+                                            }}
+                                        >
+                                            {ticket.externalCode}
+                                        </a>
                                     </td>
                                     <td style={styles.td}>
                                         <div style={styles.titleCell}>
